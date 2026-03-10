@@ -1,0 +1,91 @@
+{
+"name": "A.solid",
+"sources": [
+{
+"name": "",
+"layerName": "28e6e158",
+"locationBase": "28e6e158"
+}
+],
+"layers": {
+"28e6e158": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 37,
+"y": -2
+},
+{
+"x": 111,
+"y": -4
+},
+{
+"x": 149,
+"y": 137
+},
+{
+"x": 322,
+"y": 135
+},
+{
+"x": 348,
+"y": -4
+},
+{
+"x": 405,
+"y": 3
+},
+{
+"x": 262,
+"y": 496
+},
+{
+"x": 190,
+"y": 496
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 173,
+"y": 197
+},
+{
+"x": 234,
+"y": 381
+},
+{
+"x": 290,
+"y": 200
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 500,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "A.solid",
+"paint": {
+"alpha": 0.5,
+"paletteIndex": 4,
+"type": "PaintSolid"
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+}
+}
+}

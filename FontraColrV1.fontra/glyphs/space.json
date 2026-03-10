@@ -1,0 +1,17 @@
+{
+  "name": "space",
+  "sources": [
+    {
+      "name": "",
+      "layerName": "28e6e158",
+      "locationBase": "28e6e158"
+    }
+  ],
+  "layers": {
+    "28e6e158": {
+      "glyph": {
+        "xAdvance": 250
+      }
+    }
+  }
+}

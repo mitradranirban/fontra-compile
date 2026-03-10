@@ -57,6 +57,13 @@ VARCO_IF_VARYING = {
     "tCenterY",
 }
 
+# If a glyph layer has customData.colorv1, compile as COLRv1 (skip glyf/CFF, add COLR/CPAL)
+COLORV1_CUSTOM_KEYS = {
+    "colorv1",  # Fontra key for paint graphs (PaintColrLayers, etc.)
+}
+
+
+
 
 @dataclass
 class GlyphInfo:
@@ -71,6 +78,7 @@ class GlyphInfo:
     variableComponents: list = field(default_factory=list)
     localAxisTags: set = field(default_factory=set)
     model: VariationModel | None = None
+    hasColorV1: bool = False
 
     def __post_init__(self) -> None:
         if self.ttGlyph is None:
@@ -178,20 +186,90 @@ class Builder:
         self.glyphInfos: dict[str, GlyphInfo] = {}
         self.cmap: dict[int, str] = {}
 
+    async def _detectColorV1(self) -> bool:
+        """Read raw glyph JSON to detect colorv1 since the Fontra backend
+        drops customData during deserialization."""
+        rawGlyphMap = await self._getRawColorV1Data()
+        return bool(rawGlyphMap)
+
+    async def _getCustomData(self) -> dict:
+        """Read customData from font-data.json directly, bypassing the FontraBackend
+        which strips all customData during deserialization."""
+        import json, pathlib
+        backendPath = getattr(self.reader, "path", None) or getattr(
+            self.reader, "_path", None
+        )
+        if backendPath is None:
+            return {}
+        fontDataFile = pathlib.Path(backendPath) / "font-data.json"
+        if not fontDataFile.is_file():
+            return {}
+        try:
+            data = json.loads(fontDataFile.read_text(encoding="utf-8"))
+            return data.get("customData", {})
+        except Exception:
+            return {}
+
+    async def _getRawColorV1Data(self) -> dict:
+        """Returns {glyphName: colorv1_dict} by reading raw JSON from the backend."""
+        import json, pathlib
+
+        colorV1Data = {}
+        # Access the underlying file path from the backend reader
+        backendPath = getattr(self.reader, "path", None) or getattr(
+            self.reader, "_path", None
+        )
+        if backendPath is None:
+            return colorV1Data
+
+        backendPath = pathlib.Path(backendPath)
+        glyphsDir = backendPath / "glyphs"
+        if not glyphsDir.is_dir():
+            return colorV1Data
+
+        for jsonFile in glyphsDir.glob("*.json"):
+            try:
+                data = json.loads(jsonFile.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            glyphName = data.get("name")
+            if not glyphName:
+                continue
+            layers = data.get("layers", {})
+            # layers is a dict: {layerName: {"glyph": {...}}}
+            for layerName, layerData in layers.items():
+                glyphData = layerData.get("glyph", {})
+                customData = glyphData.get("customData", {})
+                colorv1 = customData.get("colorv1")
+                if colorv1:
+                    colorV1Data[glyphName] = colorv1
+                    break  # found in one layer, enough
+
+        return colorV1Data
+
+
     async def build(self) -> TTFont:
+
+        # Must detect COLRv1 BEFORE prepareGlyphs so the correct outline
+        # format (ttGlyph vs charString) is chosen from the start.
+        self._colorV1RawCache = await self._getRawColorV1Data()
+        if self._colorV1RawCache:
+            self.buildCFF2 = False
         await self.prepareGlyphs()
         return await self.buildFont()
 
     async def getSourceGlyph(
         self, glyphName: str, storeInCache: bool = False
-    ) -> VariableGlyph:
+    ) -> VariableGlyph | None:
         sourceGlyph = self.cachedSourceGlyphs.get(glyphName)
         if sourceGlyph is None:
             sourceGlyph = await self.reader.getGlyph(glyphName)
-            assert sourceGlyph is not None
+            if sourceGlyph is None:
+                return None
             if storeInCache:
                 self.cachedSourceGlyphs[glyphName] = sourceGlyph
         return sourceGlyph
+
 
     def ensureGlyphDependency(self, glyphName: str) -> None:
         if glyphName not in self.glyphInfos and glyphName not in self.glyphOrder:
@@ -238,6 +316,10 @@ class Builder:
 
     async def prepareOneGlyph(self, glyphName: str) -> GlyphInfo:
         glyph = await self.getSourceGlyph(glyphName, False)
+        if glyph is None:
+            raise MissingBaseGlyphError(
+                f"glyph {glyphName!r} could not be loaded from the backend"
+            )
 
         glyphSources = filterActiveSources(glyph.sources)
         checkInterpolationCompatibility(glyph, glyphSources)
@@ -279,6 +361,11 @@ class Builder:
 
         componentInfo = await self.collectComponentInfo(glyph, defaultSourceIndex)
 
+        # Check raw JSON cache built during _detectColorV1
+        has_colorv1 = glyphName in getattr(self, "_colorV1RawCache", {})
+
+
+
         leftSideBearing = computeLeftSideBearing(defaultLayerGlyph.path, self.buildCFF2)
 
         return GlyphInfo(
@@ -291,6 +378,7 @@ class Builder:
             xAdvanceVariations=xAdvanceVariations,
             leftSideBearing=leftSideBearing,
             variableComponents=componentInfo,
+            hasColorV1=has_colorv1,
             localAxisTags=set(localAxisTags.values()),
             model=model,
         )
@@ -481,6 +569,47 @@ class Builder:
                     builder.setupGVAR(gvarVariations)
                 else:
                     builder.setupGvar(gvarVariations)
+        color_glyphs = {}
+        if any(g.hasColorV1 for g in self.glyphInfos.values()):
+            print("COLRv1 detected; building paint tables...")
+            from paintcompiler import PythonBuilder
+
+            customData = await self._getCustomData() or {}
+            palettes = customData.get(
+                "com.github.googlei18n.ufo2ft.colorPalettes", []
+            )
+
+            pb = PythonBuilder(builder.font)
+            # Fontra stores palettes as [[r,g,b,a], ...] floats — convert to #RRGGBBAA
+            # and load into PythonBuilder so integer paletteIndex lookups work
+            if palettes:
+                # Fontra: palettes[paletteIdx][colorIdx] = [r, g, b, a]
+                # SetColors expects: colors[colorIdx][paletteIdx] = "#RRGGBBAA"
+                # so we must transpose: iterate color indices in the outer loop
+                numColors = len(palettes[0])
+                hexColors = [
+                    [
+                        "#{:02x}{:02x}{:02x}{:02x}".format(
+                            round(palettes[pi][ci][0] * 255),
+                            round(palettes[pi][ci][1] * 255),
+                            round(palettes[pi][ci][2] * 255),
+                            round(palettes[pi][ci][3] * 255),
+                        )
+                        for pi in range(len(palettes))
+                    ]
+                    for ci in range(numColors)
+                ]
+                pb.SetColors(hexColors)
+
+            # Read raw JSON directly — backend drops customData during deserialization
+            colorV1RawData = await self._getRawColorV1Data()
+            colorGlyphs = {}
+            for glyphName, paintData in colorV1RawData.items():
+                if glyphName in self.glyphInfos:
+                    colorGlyphs[glyphName] = self._dataToPaint(paintData, pb)
+
+            pb.build_colr(colorGlyphs)
+            pb.build_palette()
         else:
             charStrings = getGlyphInfoAttributes(self.glyphInfos, "charString")
             charStringSupports = getGlyphInfoAttributes(
@@ -689,6 +818,126 @@ class Builder:
         return varStore, advanceMapping, vOrigMapping
 
 
+    def _dataToPaint(self, data, pb):
+        """Recursively convert a Fontra colorv1 JSON dict to a paintcompiler paint dict,
+        using PythonBuilder (pb) methods directly — Paint* are not importable classes."""
+        from paintcompiler import ColorLine
+
+        def p(d):
+            return self._dataToPaint(d, pb)
+
+        def colorline(d):
+            # Fontra actual field names (from glyph JSON):
+            #   colorStops list with: stopOffset, paletteIndex, alpha
+            #   extend (optional, default "pad")
+            stops = [
+                (varscalar(s["stopOffset"]), (s["paletteIndex"], varscalar(s.get("alpha", 1.0))))
+                for s in d.get("colorStops", [])
+            ]
+            return ColorLine(stops, extend=d.get("extend", "pad"))
+
+        def varscalar(v):
+            """Convert a Fontra variable scalar to paintcompiler tuple-keyed dict.
+
+            Fontra format:
+              {"default": 300, "keyframes": [
+                  {"axis": "SHDW", "loc": 0, "value": 336},
+                  {"axis": "SHDW", "loc": 1, "value": 500}
+              ]}
+            paintcompiler expects keys as tuples of (axis, loc) pairs:
+              {(("SHDW", 0.0),): 336, (("SHDW", 1.0),): 500}
+            Plain float/int passes through unchanged.
+            """
+            if not isinstance(v, dict):
+                return v  # plain numeric, pass through
+            keyframes = v.get("keyframes", [])
+            if not keyframes:
+                return v.get("default", 1.0)  # no variation, use default
+            result = {
+                ((kf["axis"], float(kf["loc"])),): float(kf["value"])
+                for kf in keyframes
+            }
+            return result
+
+        ptype = data.get("type", "PaintColrLayers")
+
+        # --- Layering ---
+        if ptype == "PaintColrLayers":
+            return pb.PaintColrLayers([p(layer) for layer in data["layers"]])
+
+        # --- Glyph shape ---
+        elif ptype == "PaintGlyph":
+            return pb.PaintGlyph(data["glyph"], p(data["paint"]))
+        elif ptype == "PaintColrGlyph":
+            return pb.PaintColrGlyph(data["glyph"])
+
+        # --- Solid color ---
+        elif ptype == "PaintSolid":
+            return pb.PaintSolid(data["paletteIndex"], alpha=varscalar(data.get("alpha", 1.0)))
+
+        # --- Gradients ---
+        elif ptype == "PaintLinearGradient":
+            # Fontra uses x0/y0, x1/y1, x2/y2 as separate fields
+            pt0 = (varscalar(data["x0"]), varscalar(data["y0"]))
+            pt1 = (varscalar(data["x1"]), varscalar(data["y1"]))
+            pt2 = (varscalar(data["x2"]), varscalar(data["y2"]))
+            return pb.PaintLinearGradient(pt0, pt1, pt2, colorline(data["colorLine"]))
+        elif ptype == "PaintRadialGradient":
+            # Fontra uses x0/y0/x1/y1 as separate fields, never p0/p1 tuples
+            pt0 = (varscalar(data["x0"]), varscalar(data["y0"]))
+            pt1 = (varscalar(data["x1"]), varscalar(data["y1"]))
+            return pb.PaintRadialGradient(
+                pt0, varscalar(data["r0"]),
+                pt1, varscalar(data["r1"]),
+                colorline(data["colorLine"]),
+            )
+        elif ptype == "PaintSweepGradient":
+            # Fontra uses centerX/centerY as separate fields
+            center = (varscalar(data["centerX"]), varscalar(data["centerY"]))
+            return pb.PaintSweepGradient(
+                center,
+                varscalar(data["startAngle"]), varscalar(data["endAngle"]),
+                colorline(data["colorLine"]),
+            )
+
+        # --- Transforms ---
+        elif ptype == "PaintTranslate":
+            return pb.PaintTranslate(varscalar(data.get("dx", 0)), varscalar(data.get("dy", 0)), p(data["paint"]))
+        elif ptype == "PaintScale":
+            sx = varscalar(data["scaleX"])
+            sy = varscalar(data.get("scaleY", data["scaleX"]))
+            center = tuple(varscalar(c) for c in data["center"]) if "center" in data else None
+            if center:
+                if data.get("scaleY") is None:
+                    return pb.PaintScaleUniformAroundCenter(sx, center, p(data["paint"]))
+                return pb.PaintScaleAroundCenter(sx, sy, center, p(data["paint"]))
+            if data.get("scaleY") is None:
+                return pb.PaintScaleUniform(sx, p(data["paint"]))
+            return pb.PaintScale(scale_x=sx, scale_y=sy, paint=p(data["paint"]))
+        elif ptype == "PaintRotate":
+            center = tuple(varscalar(c) for c in data["center"]) if "center" in data else None
+            if center:
+                return pb.PaintRotateAroundCenter(varscalar(data["angle"]), center, p(data["paint"]))
+            return pb.PaintRotate(angle=varscalar(data["angle"]), paint=p(data["paint"]))
+        elif ptype == "PaintSkew":
+            center = tuple(varscalar(c) for c in data["center"]) if "center" in data else None
+            if center:
+                return pb.PaintSkewAroundCenter(varscalar(data["angleX"]), varscalar(data["angleY"]), center, p(data["paint"]))
+            return pb.PaintSkew(varscalar(data["angleX"]), varscalar(data["angleY"]), p(data["paint"]))
+        elif ptype == "PaintTransform":
+            # matrix: [xx, yx, xy, yy, dx, dy] (affine 2x3) — each element may be variable
+            return pb.PaintTransform([varscalar(v) for v in data["matrix"]], p(data["paint"]))
+
+        # --- Compositing ---
+        elif ptype == "PaintComposite":
+            return pb.PaintComposite(
+                data.get("mode", "SRC_OVER"),
+                p(data["source"]),
+                p(data["backdrop"]),
+            )
+
+        raise ValueError(f"Unsupported paint type: {ptype!r}")
+
 def prepareLocations(glyphSources, defaultLocation, axisDict):
     return [
         normalizeLocation({**defaultLocation, **source.location}, axisDict)
@@ -830,7 +1079,6 @@ def prepareCFFVarData(charStrings, charStringSupports):
         varDataList.append(buildVarData(varTupleIndexes, None, False))
 
     return varDataList, regionList
-
 
 def dictZip(*dicts: dict) -> dict:
     keys = dicts[0].keys()
