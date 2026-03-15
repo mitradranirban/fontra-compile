@@ -2,5 +2,5 @@ fonttools==4.61.1
 fontmake==3.11.1
 fontc==0.6.0
 paintcompiler==0.3.4
-git+https://github.com/fontra/fontra.git
+git+https://github.com/mitradranirban/fontra.git@fontra-color-support
 git+https://github.com/fontra/fontra-rcjk.git

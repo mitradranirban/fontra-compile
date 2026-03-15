@@ -12,7 +12,6 @@ from fontra.backends.copy import copyFont
 from fontra.core.protocols import ReadableFontBackend
 from fontra.workflow.actions import (
     OutputProcessorProtocol,
-    getActionClass,
     registerOutputAction,
 )
 from fontTools.designspaceLib import DesignSpaceDocument
@@ -68,15 +67,9 @@ class CompileFontMakeAction:
                 assert hasattr(dsBackend, "setOverlapSimpleFlag")
                 dsBackend.setOverlapSimpleFlag = True
 
-            unusedSourcesFilter = getActionClass(
-                "filter", "drop-unused-sources-and-layers"
-            )()
+            async with aclosing(dsBackend):
+                await copyFont(self.input, dsBackend, continueOnError=continueOnError)
 
-            async with (
-                aclosing(dsBackend),
-                unusedSourcesFilter.connect(self.input) as inBackend,
-            ):
-                await copyFont(inBackend, dsBackend, continueOnError=continueOnError)
 
             if isVariable:
                 addInstances(sourcePath)
