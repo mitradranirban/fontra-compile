@@ -69,7 +69,8 @@ class CompileFontMakeAction:
 
             async with aclosing(dsBackend):
                 await copyFont(self.input, dsBackend, continueOnError=continueOnError)
-
+            # add function to prevent stripping of color palette data
+            _fixColorLibKeys(self.input, tmpDir)    
 
             if isVariable:
                 addInstances(sourcePath)
@@ -191,3 +192,75 @@ def addMinimalGaspTable(designspacePath):
         {"rangeMaxPPEM": 0xFFFF, "rangeGaspBehavior": [0, 1, 2, 3]}
     ]
     ufo.writeInfo(fontInfo)
+def _fixColorLibKeys(sourceBackend, tmpDir: pathlib.Path):
+    """
+    copyFont copies glyph outlines and per-glyph colorLayerMapping correctly,
+    but does not copy colorPalettes to lib.plist or color layer glyph names
+    to public.glyphOrder. Without these, ufo2ft's ExplodeColorLayerGlyphs
+    filter never fires and fontmake produces a monochrome font.
+    """
+    import plistlib
+    from fontTools.designspaceLib import DesignSpaceDocument
+
+    PALETTES_KEY = "com.github.googlei18n.ufo2ft.colorPalettes"
+
+    # Get source UFO paths
+    sourcePath = getattr(sourceBackend, "path", None)
+    if sourcePath is None:
+        return
+    sourcePath = pathlib.Path(sourcePath)
+
+    if sourcePath.suffix == ".ufo":
+        sourceUFOs = [sourcePath]
+        tempUFOs = list(tmpDir.glob("*.ufo"))
+    elif sourcePath.suffix == ".designspace":
+        dsDoc = DesignSpaceDocument.fromfile(sourcePath)
+        sourceUFOs = [pathlib.Path(src.path) for src in dsDoc.sources]
+        tempUFOs = list(tmpDir.glob("*.ufo"))
+    else:
+        return
+
+    for sourceUFO in sourceUFOs:
+        if not sourceUFO.exists():
+            continue
+
+        sourceLibPath = sourceUFO / "lib.plist"
+        if not sourceLibPath.exists():
+            continue
+        sourceLib = plistlib.loads(sourceLibPath.read_bytes())
+
+        # Match source UFO to its corresponding temp UFO by name stem
+        tempUFO = next(
+            (t for t in tempUFOs if sourceUFO.stem in t.stem), None
+        )
+        if tempUFO is None:
+            continue
+
+        tempLibPath = tempUFO / "lib.plist"
+        tempLib = plistlib.loads(tempLibPath.read_bytes())
+        modified = False
+
+        # 1. Inject colorPalettes — required for ExplodeColorLayerGlyphs to fire
+        if PALETTES_KEY in sourceLib and PALETTES_KEY not in tempLib:
+            tempLib[PALETTES_KEY] = sourceLib[PALETTES_KEY]
+            modified = True
+
+        # 2. Add color layer glyph names to public.glyphOrder
+        #    so fontmake compiles them into glyf/CFF
+        layerContentsPath = tempUFO / "layercontents.plist"
+        if layerContentsPath.exists():
+            layerContents = plistlib.loads(layerContentsPath.read_bytes())
+            glyphOrder = tempLib.get("public.glyphOrder", [])
+            for layerName, layerDir in layerContents:
+                if layerName == "public.default":
+                    continue
+                contentsPath = tempUFO / layerDir / "contents.plist"
+                if contentsPath.exists():
+                    for glyphName in plistlib.loads(contentsPath.read_bytes()):
+                        if glyphName not in glyphOrder:
+                            glyphOrder.append(glyphName)
+                            modified = True
+            tempLib["public.glyphOrder"] = glyphOrder
+
+        if modified:
+            tempLibPath.write_bytes(plistlib.dumps(tempLib))
