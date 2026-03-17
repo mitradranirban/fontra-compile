@@ -63,8 +63,6 @@ COLORV1_CUSTOM_KEYS = {
 }
 
 
-
-
 @dataclass
 class GlyphInfo:
     hasContours: bool
@@ -195,7 +193,9 @@ class Builder:
     async def _getCustomData(self) -> dict:
         """Read customData from font-data.json directly, bypassing the FontraBackend
         which strips all customData during deserialization."""
-        import json, pathlib
+        import json
+        import pathlib
+
         backendPath = getattr(self.reader, "path", None) or getattr(
             self.reader, "_path", None
         )
@@ -212,7 +212,8 @@ class Builder:
 
     async def _getRawColorV1Data(self) -> dict:
         """Returns {glyphName: colorv1_dict} by reading raw JSON from the backend."""
-        import json, pathlib
+        import json
+        import pathlib
 
         colorV1Data = {}
         # Access the underlying file path from the backend reader
@@ -247,7 +248,6 @@ class Builder:
 
         return colorV1Data
 
-
     async def build(self) -> TTFont:
 
         # Must detect COLRv1 BEFORE prepareGlyphs so the correct outline
@@ -269,7 +269,6 @@ class Builder:
             if storeInCache:
                 self.cachedSourceGlyphs[glyphName] = sourceGlyph
         return sourceGlyph
-
 
     def ensureGlyphDependency(self, glyphName: str) -> None:
         if glyphName not in self.glyphInfos and glyphName not in self.glyphOrder:
@@ -363,8 +362,6 @@ class Builder:
 
         # Check raw JSON cache built during _detectColorV1
         has_colorv1 = glyphName in getattr(self, "_colorV1RawCache", {})
-
-
 
         leftSideBearing = computeLeftSideBearing(defaultLayerGlyph.path, self.buildCFF2)
 
@@ -569,15 +566,12 @@ class Builder:
                     builder.setupGVAR(gvarVariations)
                 else:
                     builder.setupGvar(gvarVariations)
-        color_glyphs = {}
         if any(g.hasColorV1 for g in self.glyphInfos.values()):
             print("COLRv1 detected; building paint tables...")
             from paintcompiler import PythonBuilder
 
             customData = await self._getCustomData() or {}
-            palettes = customData.get(
-                "com.github.googlei18n.ufo2ft.colorPalettes", []
-            )
+            palettes = customData.get("com.github.googlei18n.ufo2ft.colorPalettes", [])
 
             pb = PythonBuilder(builder.font)
             # Fontra stores palettes as [[r,g,b,a], ...] floats — convert to #RRGGBBAA
@@ -817,10 +811,10 @@ class Builder:
 
         return varStore, advanceMapping, vOrigMapping
 
-
     def _dataToPaint(self, data, pb):
         """Recursively convert a Fontra colorv1 JSON dict to a paintcompiler paint dict,
-        using PythonBuilder (pb) methods directly — Paint* are not importable classes."""
+        using PythonBuilder (pb) methods directly — Paint* are not importable classes.
+        """
         from paintcompiler import ColorLine
 
         def p(d):
@@ -831,7 +825,10 @@ class Builder:
             #   colorStops list with: stopOffset, paletteIndex, alpha
             #   extend (optional, default "pad")
             stops = [
-                (varscalar(s["stopOffset"]), (s["paletteIndex"], varscalar(s.get("alpha", 1.0))))
+                (
+                    varscalar(s["stopOffset"]),
+                    (s["paletteIndex"], varscalar(s.get("alpha", 1.0))),
+                )
                 for s in d.get("colorStops", [])
             ]
             return ColorLine(stops, extend=d.get("extend", "pad"))
@@ -873,7 +870,9 @@ class Builder:
 
         # --- Solid color ---
         elif ptype == "PaintSolid":
-            return pb.PaintSolid(data["paletteIndex"], alpha=varscalar(data.get("alpha", 1.0)))
+            return pb.PaintSolid(
+                data["paletteIndex"], alpha=varscalar(data.get("alpha", 1.0))
+            )
 
         # --- Gradients ---
         elif ptype == "PaintLinearGradient":
@@ -887,8 +886,10 @@ class Builder:
             pt0 = (varscalar(data["x0"]), varscalar(data["y0"]))
             pt1 = (varscalar(data["x1"]), varscalar(data["y1"]))
             return pb.PaintRadialGradient(
-                pt0, varscalar(data["r0"]),
-                pt1, varscalar(data["r1"]),
+                pt0,
+                varscalar(data["r0"]),
+                pt1,
+                varscalar(data["r1"]),
                 colorline(data["colorLine"]),
             )
         elif ptype == "PaintSweepGradient":
@@ -896,37 +897,69 @@ class Builder:
             center = (varscalar(data["centerX"]), varscalar(data["centerY"]))
             return pb.PaintSweepGradient(
                 center,
-                varscalar(data["startAngle"]), varscalar(data["endAngle"]),
+                varscalar(data["startAngle"]),
+                varscalar(data["endAngle"]),
                 colorline(data["colorLine"]),
             )
 
         # --- Transforms ---
         elif ptype == "PaintTranslate":
-            return pb.PaintTranslate(varscalar(data.get("dx", 0)), varscalar(data.get("dy", 0)), p(data["paint"]))
+            return pb.PaintTranslate(
+                varscalar(data.get("dx", 0)),
+                varscalar(data.get("dy", 0)),
+                p(data["paint"]),
+            )
         elif ptype == "PaintScale":
             sx = varscalar(data["scaleX"])
             sy = varscalar(data.get("scaleY", data["scaleX"]))
-            center = tuple(varscalar(c) for c in data["center"]) if "center" in data else None
+            center = (
+                tuple(varscalar(c) for c in data["center"])
+                if "center" in data
+                else None
+            )
             if center:
                 if data.get("scaleY") is None:
-                    return pb.PaintScaleUniformAroundCenter(sx, center, p(data["paint"]))
+                    return pb.PaintScaleUniformAroundCenter(
+                        sx, center, p(data["paint"])
+                    )
                 return pb.PaintScaleAroundCenter(sx, sy, center, p(data["paint"]))
             if data.get("scaleY") is None:
                 return pb.PaintScaleUniform(sx, p(data["paint"]))
             return pb.PaintScale(scale_x=sx, scale_y=sy, paint=p(data["paint"]))
         elif ptype == "PaintRotate":
-            center = tuple(varscalar(c) for c in data["center"]) if "center" in data else None
+            center = (
+                tuple(varscalar(c) for c in data["center"])
+                if "center" in data
+                else None
+            )
             if center:
-                return pb.PaintRotateAroundCenter(varscalar(data["angle"]), center, p(data["paint"]))
-            return pb.PaintRotate(angle=varscalar(data["angle"]), paint=p(data["paint"]))
+                return pb.PaintRotateAroundCenter(
+                    varscalar(data["angle"]), center, p(data["paint"])
+                )
+            return pb.PaintRotate(
+                angle=varscalar(data["angle"]), paint=p(data["paint"])
+            )
         elif ptype == "PaintSkew":
-            center = tuple(varscalar(c) for c in data["center"]) if "center" in data else None
+            center = (
+                tuple(varscalar(c) for c in data["center"])
+                if "center" in data
+                else None
+            )
             if center:
-                return pb.PaintSkewAroundCenter(varscalar(data["angleX"]), varscalar(data["angleY"]), center, p(data["paint"]))
-            return pb.PaintSkew(varscalar(data["angleX"]), varscalar(data["angleY"]), p(data["paint"]))
+                return pb.PaintSkewAroundCenter(
+                    varscalar(data["angleX"]),
+                    varscalar(data["angleY"]),
+                    center,
+                    p(data["paint"]),
+                )
+            return pb.PaintSkew(
+                varscalar(data["angleX"]), varscalar(data["angleY"]), p(data["paint"])
+            )
         elif ptype == "PaintTransform":
             # matrix: [xx, yx, xy, yy, dx, dy] (affine 2x3) — each element may be variable
-            return pb.PaintTransform([varscalar(v) for v in data["matrix"]], p(data["paint"]))
+            return pb.PaintTransform(
+                [varscalar(v) for v in data["matrix"]], p(data["paint"])
+            )
 
         # --- Compositing ---
         elif ptype == "PaintComposite":
@@ -937,6 +970,7 @@ class Builder:
             )
 
         raise ValueError(f"Unsupported paint type: {ptype!r}")
+
 
 def prepareLocations(glyphSources, defaultLocation, axisDict):
     return [
@@ -1079,6 +1113,7 @@ def prepareCFFVarData(charStrings, charStringSupports):
         varDataList.append(buildVarData(varTupleIndexes, None, False))
 
     return varDataList, regionList
+
 
 def dictZip(*dicts: dict) -> dict:
     keys = dicts[0].keys()

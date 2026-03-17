@@ -70,7 +70,7 @@ class CompileFontMakeAction:
             async with aclosing(dsBackend):
                 await copyFont(self.input, dsBackend, continueOnError=continueOnError)
             # add function to prevent stripping of color palette data
-            _fixColorLibKeys(self.input, tmpDir)    
+            _fixColorLibKeys(self.input, tmpDir)
 
             if isVariable:
                 addInstances(sourcePath)
@@ -192,6 +192,8 @@ def addMinimalGaspTable(designspacePath):
         {"rangeMaxPPEM": 0xFFFF, "rangeGaspBehavior": [0, 1, 2, 3]}
     ]
     ufo.writeInfo(fontInfo)
+
+
 def _fixColorLibKeys(sourceBackend, tmpDir: pathlib.Path):
     """
     copyFont copies glyph outlines and per-glyph colorLayerMapping correctly,
@@ -200,6 +202,7 @@ def _fixColorLibKeys(sourceBackend, tmpDir: pathlib.Path):
     filter never fires and fontmake produces a monochrome font.
     """
     import plistlib
+
     from fontTools.designspaceLib import DesignSpaceDocument
 
     PALETTES_KEY = "com.github.googlei18n.ufo2ft.colorPalettes"
@@ -230,9 +233,7 @@ def _fixColorLibKeys(sourceBackend, tmpDir: pathlib.Path):
         sourceLib = plistlib.loads(sourceLibPath.read_bytes())
 
         # Match source UFO to its corresponding temp UFO by name stem
-        tempUFO = next(
-            (t for t in tempUFOs if sourceUFO.stem in t.stem), None
-        )
+        tempUFO = next((t for t in tempUFOs if sourceUFO.stem in t.stem), None)
         if tempUFO is None:
             continue
 
