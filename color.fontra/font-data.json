@@ -1,0 +1,67 @@
+{
+"axes": {
+"axes": [
+{
+"name": "shadow",
+"label": "Shadow",
+"tag": "SHDW",
+"minValue": 0,
+"defaultValue": 0,
+"maxValue": 1
+}
+]
+},
+"sources": {
+"3951d68f": {
+"name": "Regular",
+"lineMetricsHorizontalLayout": {
+"ascender": {
+"value": 750,
+"zone": 16
+},
+"descender": {
+"value": -250,
+"zone": -16
+},
+"xHeight": {
+"value": 500,
+"zone": 16
+},
+"capHeight": {
+"value": 750,
+"zone": 16
+},
+"baseline": {
+"value": 0,
+"zone": -16
+}
+}
+}
+},
+"customData": {
+"com.github.googlei18n.ufo2ft.colorPalettes": [
+[
+[
+0.30980392156862746,
+0.23137254901960785,
+0.23137254901960785,
+1
+],
+[
+0.8627450980392157,
+0.01568627450980392,
+0.01568627450980392,
+1
+]
+]
+],
+"fontra.projectGlyphSets": [
+{
+"commentChars": "#",
+"dataFormat": "glyph-names",
+"name": "GF Latin Kernel",
+"url": "https://cdn.jsdelivr.net/gh/googlefonts/glyphsets/data/results/txt/nice-names/GF_Latin_Kernel.txt"
+}
+]
+}
+}

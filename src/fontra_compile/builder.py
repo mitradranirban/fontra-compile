@@ -34,6 +34,214 @@ from fontTools.varLib.models import (
 )
 from fontTools.varLib.multiVarStore import OnlineMultiVarStoreBuilder
 from fontTools.varLib.varStore import OnlineVarStoreBuilder
+from paintcompiler import VarScalar
+
+
+def merge_paint_sources(
+    layerPaints: dict,  # { layerName: colorv1_dict }
+    sources,  # glyph.sources (ordered)
+    model: VariationModel,
+    globalAxisTags: dict,  # name→tag
+) -> dict:
+    """
+    Given one colorv1 paint dict per source layer, return a single
+    merged paint dict where varying scalar fields are VarScalars.
+    """
+    # Order paints to match model's reverseMapping (default first)
+    orderedPaints = [
+        layerPaints.get(sources[i].layerName) for i in model.reverseMapping
+    ]
+    defaultPaint = orderedPaints[0]
+    return _merge_node(orderedPaints, defaultPaint, model, sources, globalAxisTags)
+
+
+def _merge_scalar(values, model, sources, globalAxisTags):
+    """
+    values: list of scalar values across sources (model.reverseMapping order).
+    Returns a VarScalar if they vary, or plain value if static.
+    """
+    if all(v == values[0] for v in values):
+        return values[0]  # static, no variation
+    deltas, supports = model.getDeltasAndSupports(values)
+    # Build VarScalar: default=values[0], keyframes from deltas+supports
+    keyframes = {}
+    for delta, support in zip(deltas[1:], supports[1:]):  # skip default
+        # support is e.g. {"COLOR": (0, 1, 1)} — peak is index 1
+        for axisName, (minV, peakV, maxV) in support.items():
+            tag = globalAxisTags.get(axisName, axisName)
+            keyframes[(tag, peakV)] = delta
+    return VarScalar(values[0], keyframes)
+
+
+def _merge_node(nodes, default, model, sources, axisTags):
+    ptype = default.get("type")
+
+    def ms(key):
+        return _merge_scalar([n[key] for n in nodes], model, sources, axisTags)
+
+    def ms_opt(key, fallback=0):
+        return _merge_scalar(
+            [n.get(key, fallback) for n in nodes], model, sources, axisTags
+        )
+
+    def recurse(key):
+        return _merge_node(
+            [n[key] for n in nodes], default[key], model, sources, axisTags
+        )
+
+    if ptype == "PaintColrLayers":
+        return {
+            "type": ptype,
+            "layers": [
+                _merge_node(
+                    [n["layers"][i] for n in nodes],
+                    default["layers"][i],
+                    model,
+                    sources,
+                    axisTags,
+                )
+                for i in range(len(default["layers"]))
+            ],
+        }
+
+    elif ptype == "PaintGlyph":
+        return {"type": ptype, "glyph": default["glyph"], "paint": recurse("paint")}
+
+    elif ptype == "PaintColrGlyph":
+        return {"type": ptype, "glyph": default["glyph"]}  # no varying fields
+
+    elif ptype == "PaintSolid":
+        return {
+            "type": ptype,
+            "paletteIndex": default["paletteIndex"],
+            "alpha": ms("alpha"),
+        }
+
+    elif ptype == "PaintLinearGradient":
+        return {
+            "type": ptype,
+            "x0": ms("x0"),
+            "y0": ms("y0"),
+            "x1": ms("x1"),
+            "y1": ms("y1"),
+            "x2": ms("x2"),
+            "y2": ms("y2"),
+            "colorLine": _merge_colorline(
+                [n["colorLine"] for n in nodes], model, sources, axisTags
+            ),
+        }
+
+    elif ptype == "PaintRadialGradient":
+        return {
+            "type": ptype,
+            "x0": ms("x0"),
+            "y0": ms("y0"),
+            "r0": ms("r0"),
+            "x1": ms("x1"),
+            "y1": ms("y1"),
+            "r1": ms("r1"),
+            "colorLine": _merge_colorline(
+                [n["colorLine"] for n in nodes], model, sources, axisTags
+            ),
+        }
+
+    elif ptype == "PaintSweepGradient":
+        return {
+            "type": ptype,
+            "centerX": ms("centerX"),
+            "centerY": ms("centerY"),
+            "startAngle": ms("startAngle"),
+            "endAngle": ms("endAngle"),
+            "colorLine": _merge_colorline(
+                [n["colorLine"] for n in nodes], model, sources, axisTags
+            ),
+        }
+
+    elif ptype == "PaintTranslate":
+        return {
+            "type": ptype,
+            "dx": ms_opt("dx"),
+            "dy": ms_opt("dy"),
+            "paint": recurse("paint"),
+        }
+
+    elif ptype == "PaintScale":
+        node = {"type": ptype, "paint": recurse("paint"), "scaleX": ms("scaleX")}
+        if "scaleY" in default:
+            node["scaleY"] = ms("scaleY")
+        if "center" in default:
+            node["center"] = [
+                _merge_scalar([n["center"][i] for n in nodes], model, sources, axisTags)
+                for i in range(2)
+            ]
+        return node
+
+    elif ptype == "PaintRotate":
+        node = {"type": ptype, "angle": ms("angle"), "paint": recurse("paint")}
+        if "center" in default:
+            node["center"] = [
+                _merge_scalar([n["center"][i] for n in nodes], model, sources, axisTags)
+                for i in range(2)
+            ]
+        return node
+
+    elif ptype == "PaintSkew":
+        node = {
+            "type": ptype,
+            "angleX": ms("angleX"),
+            "angleY": ms("angleY"),
+            "paint": recurse("paint"),
+        }
+        if "center" in default:
+            node["center"] = [
+                _merge_scalar([n["center"][i] for n in nodes], model, sources, axisTags)
+                for i in range(2)
+            ]
+        return node
+
+    elif ptype == "PaintTransform":
+        return {
+            "type": ptype,
+            "matrix": [
+                _merge_scalar([n["matrix"][i] for n in nodes], model, sources, axisTags)
+                for i in range(6)
+            ],
+            "paint": recurse("paint"),
+        }
+
+    elif ptype == "PaintComposite":
+        return {
+            "type": ptype,
+            "mode": default.get("mode", "src_over"),
+            "source": recurse("source"),
+            "backdrop": recurse("backdrop"),
+        }
+
+    return default  # unknown type — pass through static
+
+
+def _merge_colorline(colorlines, model, sources, axisTags):
+    default = colorlines[0]
+    merged_stops = []
+    for i, stop in enumerate(default["colorStops"]):
+        merged_stops.append(
+            {
+                "paletteIndex": stop["paletteIndex"],
+                "stopOffset": _merge_scalar(
+                    [cl["colorStops"][i]["stopOffset"] for cl in colorlines],
+                    model,
+                    sources,
+                    axisTags,
+                ),
+                "alpha": _merge_scalar(
+                    [cl["colorStops"][i]["alpha"] for cl in colorlines],
+                    model,
+                    sources,
+                    axisTags,
+                ),
+            }
+        )
+    return {"colorStops": merged_stops, "extend": default.get("extend", "pad")}
 
 
 class InterpolationError(Exception):
@@ -187,10 +395,10 @@ class Builder:
     async def _detectColorV1(self) -> bool:
         """Read raw glyph JSON to detect colorv1 since the Fontra backend
         drops customData during deserialization."""
-        rawGlyphMap = await self._getRawColorV1Data()
+        rawGlyphMap = await self.getRawColorV1Data()
         return bool(rawGlyphMap)
 
-    async def _getCustomData(self) -> dict:
+    async def getCustomData(self) -> dict:
         """Read customData from font-data.json directly, bypassing the FontraBackend
         which strips all customData during deserialization."""
         import json
@@ -210,24 +418,17 @@ class Builder:
         except Exception:
             return {}
 
-    async def _getRawColorV1Data(self) -> dict:
-        """Returns {glyphName: colorv1_dict} by reading raw JSON from the backend."""
+    async def getRawColorV1Data(self) -> dict:
         import json
         import pathlib
 
         colorV1Data = {}
-        # Access the underlying file path from the backend reader
-        backendPath = getattr(self.reader, "path", None) or getattr(
-            self.reader, "_path", None
-        )
+        backendPath = getattr(self.reader, "path", None)
         if backendPath is None:
             return colorV1Data
-
-        backendPath = pathlib.Path(backendPath)
-        glyphsDir = backendPath / "glyphs"
+        glyphsDir = pathlib.Path(backendPath) / "glyphs"
         if not glyphsDir.is_dir():
             return colorV1Data
-
         for jsonFile in glyphsDir.glob("*.json"):
             try:
                 data = json.loads(jsonFile.read_text(encoding="utf-8"))
@@ -237,22 +438,19 @@ class Builder:
             if not glyphName:
                 continue
             layers = data.get("layers", {})
-            # layers is a dict: {layerName: {"glyph": {...}}}
             for layerName, layerData in layers.items():
-                glyphData = layerData.get("glyph", {})
-                customData = glyphData.get("customData", {})
-                colorv1 = customData.get("colorv1")
+                colorv1 = (
+                    layerData.get("glyph", {}).get("customData", {}).get("colorv1")
+                )
                 if colorv1:
-                    colorV1Data[glyphName] = colorv1
-                    break  # found in one layer, enough
-
-        return colorV1Data
+                    colorV1Data.setdefault(glyphName, {})[layerName] = colorv1
+        return colorV1Data  # { glyphName: { layerName: colorv1_dict } }
 
     async def build(self) -> TTFont:
 
         # Must detect COLRv1 BEFORE prepareGlyphs so the correct outline
         # format (ttGlyph vs charString) is chosen from the start.
-        self._colorV1RawCache = await self._getRawColorV1Data()
+        self._colorV1RawCache = await self.getRawColorV1Data()
         if self._colorV1RawCache:
             self.buildCFF2 = False
         await self.prepareGlyphs()
@@ -570,7 +768,7 @@ class Builder:
             print("COLRv1 detected; building paint tables...")
             from paintcompiler import PythonBuilder
 
-            customData = await self._getCustomData() or {}
+            customData = await self.getCustomData() or {}
             palettes = customData.get("com.github.googlei18n.ufo2ft.colorPalettes", [])
 
             pb = PythonBuilder(builder.font)
@@ -596,14 +794,35 @@ class Builder:
                 pb.SetColors(hexColors)
 
             # Read raw JSON directly — backend drops customData during deserialization
-            colorV1RawData = await self._getRawColorV1Data()
+            colorV1RawData = await self.getRawColorV1Data()
             colorGlyphs = {}
-            for glyphName, paintData in colorV1RawData.items():
-                if glyphName in self.glyphInfos:
-                    colorGlyphs[glyphName] = self._dataToPaint(paintData, pb)
+            for glyphName, layerPaints in colorV1RawData.items():
+                if glyphName not in self.glyphInfos:
+                    continue
+                glyphInfo = self.glyphInfos[glyphName]
+                sourceGlyph = await self.getSourceGlyph(glyphName)
 
-            pb.build_colr(colorGlyphs)
-            pb.build_palette()
+                if len(layerPaints) > 1 and glyphInfo.model is not None:
+                    # Multi-source: merge across layers into VarScalar paint dict
+                    paintDict = merge_paint_sources(
+                        layerPaints,
+                        filterActiveSources(sourceGlyph.sources),
+                        glyphInfo.model,
+                        self.globalAxisTags,
+                    )
+                else:
+                    # Single source or no model: use default layer directly
+                    defaultLayerName = filterActiveSources(sourceGlyph.sources)[
+                        0
+                    ].layerName
+                    paintDict = layerPaints.get(
+                        defaultLayerName, next(iter(layerPaints.values()))
+                    )
+
+                colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
+
+            pb.buildcolr(colorGlyphs)
+            pb.buildpalette()
         else:
             charStrings = getGlyphInfoAttributes(self.glyphInfos, "charString")
             charStringSupports = getGlyphInfoAttributes(
@@ -833,28 +1052,22 @@ class Builder:
             ]
             return ColorLine(stops, extend=d.get("extend", "pad"))
 
-        def varscalar(v):
-            """Convert a Fontra variable scalar to paintcompiler tuple-keyed dict.
+        from paintcompiler import VarScalar
 
-            Fontra format:
-              {"default": 300, "keyframes": [
-                  {"axis": "SHDW", "loc": 0, "value": 336},
-                  {"axis": "SHDW", "loc": 1, "value": 500}
-              ]}
-            paintcompiler expects keys as tuples of (axis, loc) pairs:
-              {(("SHDW", 0.0),): 336, (("SHDW", 1.0),): 500}
-            Plain float/int passes through unchanged.
-            """
+        def varscalar(v):
+            if isinstance(v, VarScalar):
+                return v  # already merged upstream
             if not isinstance(v, dict):
-                return v  # plain numeric, pass through
-            keyframes = v.get("keyframes", [])
+                return v  # plain static number
+            # Legacy fallback: inline keyframe format
+            keyframes = v.get("keyframes")
             if not keyframes:
-                return v.get("default", 1.0)  # no variation, use default
-            result = {
-                ((kf["axis"], float(kf["loc"])),): float(kf["value"])
-                for kf in keyframes
+                return v.get("default", 0)
+            default = v.get("default", keyframes[0]["value"])
+            values = {
+                (kf["axis"], float(kf["loc"])): float(kf["value"]) for kf in keyframes
             }
-            return result
+            return VarScalar(default, values)
 
         ptype = data.get("type", "PaintColrLayers")
 

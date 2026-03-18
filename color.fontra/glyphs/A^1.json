@@ -1,0 +1,93 @@
+{
+"name": "A",
+"sources": [
+{
+"name": "",
+"layerName": "3951d68f",
+"locationBase": "3951d68f"
+}
+],
+"layers": {
+"3951d68f": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 62,
+"y": 499
+},
+{
+"x": 62,
+"y": 6
+},
+{
+"x": 425,
+"y": 6
+},
+{
+"x": 425,
+"y": 499
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 500,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "A",
+"paint": {
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 1,
+"paletteIndex": 1,
+"stopOffset": 1
+}
+]
+},
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 1,
+"paletteIndex": 1,
+"stopOffset": 1
+},
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+}
+],
+"type": "PaintLinearGradient",
+"x0": 0,
+"x1": 500,
+"x2": 500,
+"y0": 0,
+"y1": 0,
+"y2": 500
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+}
+}
+}

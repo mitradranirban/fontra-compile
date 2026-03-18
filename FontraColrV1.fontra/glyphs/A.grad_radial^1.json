@@ -1,124 +1,124 @@
 {
-"name": "A.grad_radial",
-"sources": [
-{
-"name": "",
-"layerName": "28e6e158",
-"locationBase": "28e6e158"
-}
-],
-"layers": {
-"28e6e158": {
-"glyph": {
-"path": {
-"contours": [
-{
-"points": [
-{
-"x": 37,
-"y": 0
-},
-{
-"x": 111,
-"y": 0
-},
-{
-"x": 158,
-"y": 139
-},
-{
-"x": 305,
-"y": 141
-},
-{
-"x": 348,
-"y": 0
-},
-{
-"x": 405,
-"y": 0
-},
-{
-"x": 262,
-"y": 496
-},
-{
-"x": 190,
-"y": 496
-}
-],
-"isClosed": true
-},
-{
-"points": [
-{
-"x": 177,
-"y": 197
-},
-{
-"x": 234,
-"y": 381
-},
-{
-"x": 290,
-"y": 200
-}
-],
-"isClosed": true
-}
-]
-},
-"xAdvance": 500,
-"customData": {
-"colorv1": {
-"layers": [
-{
-"glyph": "A.grad_radial",
-"paint": {
-"colorLine": {
-"colorStops": [
-{
-"alpha": 1,
-"paletteIndex": 4,
-"stopOffset": 0
-},
-{
-"alpha": 0,
-"paletteIndex": 2,
-"stopOffset": 1
-}
-],
-"extend": "pad"
-},
-"r0": 0,
-"r1": {
-"default": 300,
-"keyframes": [
-{
-"axis": "SHDW",
-"loc": 0,
-"value": 336
-},
-{
-"axis": "SHDW",
-"loc": 1,
-"value": 500
-}
-]
-},
-"type": "PaintRadialGradient",
-"x0": 330,
-"x1": 330,
-"y0": 350,
-"y1": 350
-},
-"type": "PaintGlyph"
-}
-],
-"type": "PaintColrLayers"
-}
-}
-}
-}
-}
+  "name": "A.grad_radial",
+  "sources": [
+    {
+      "name": "",
+      "layerName": "28e6e158",
+      "locationBase": "28e6e158"
+    }
+  ],
+  "layers": {
+    "28e6e158": {
+      "glyph": {
+        "path": {
+          "contours": [
+            {
+              "points": [
+                {
+                  "x": 37,
+                  "y": 0
+                },
+                {
+                  "x": 111,
+                  "y": 0
+                },
+                {
+                  "x": 158,
+                  "y": 139
+                },
+                {
+                  "x": 305,
+                  "y": 141
+                },
+                {
+                  "x": 348,
+                  "y": 0
+                },
+                {
+                  "x": 405,
+                  "y": 0
+                },
+                {
+                  "x": 262,
+                  "y": 496
+                },
+                {
+                  "x": 190,
+                  "y": 496
+                }
+              ],
+              "isClosed": true
+            },
+            {
+              "points": [
+                {
+                  "x": 177,
+                  "y": 197
+                },
+                {
+                  "x": 234,
+                  "y": 381
+                },
+                {
+                  "x": 290,
+                  "y": 200
+                }
+              ],
+              "isClosed": true
+            }
+          ]
+        },
+        "xAdvance": 500,
+        "customData": {
+          "colorv1": {
+            "layers": [
+              {
+                "glyph": "A.grad_radial",
+                "paint": {
+                  "colorLine": {
+                    "colorStops": [
+                      {
+                        "alpha": 1,
+                        "paletteIndex": 4,
+                        "stopOffset": 0
+                      },
+                      {
+                        "alpha": 0,
+                        "paletteIndex": 2,
+                        "stopOffset": 1
+                      }
+                    ],
+                    "extend": "pad"
+                  },
+                  "r0": 0,
+                  "r1": {
+                    "default": 300,
+                    "keyframes": [
+                      {
+                        "axis": "SHDW",
+                        "loc": 0,
+                        "value": 336
+                      },
+                      {
+                        "axis": "SHDW",
+                        "loc": 1,
+                        "value": 500
+                      }
+                    ]
+                  },
+                  "type": "PaintRadialGradient",
+                  "x0": 330,
+                  "x1": 330,
+                  "y0": 350,
+                  "y1": 350
+                },
+                "type": "PaintGlyph"
+              }
+            ],
+            "type": "PaintColrLayers"
+          }
+        }
+      }
+    }
+  }
 }
