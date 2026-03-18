@@ -34,7 +34,7 @@ from fontTools.varLib.models import (
 )
 from fontTools.varLib.multiVarStore import OnlineMultiVarStoreBuilder
 from fontTools.varLib.varStore import OnlineVarStoreBuilder
-from paintcompiler import VarScalar
+from paintcompiler import ColorLine, PythonBuilder
 
 
 def merge_paint_sources(
@@ -45,7 +45,7 @@ def merge_paint_sources(
 ) -> dict:
     """
     Given one colorv1 paint dict per source layer, return a single
-    merged paint dict where varying scalar fields are VarScalars.
+    merged paint dict where varying scalar field
     """
     # Order paints to match model's reverseMapping (default first)
     orderedPaints = [
@@ -58,19 +58,23 @@ def merge_paint_sources(
 def _merge_scalar(values, model, sources, globalAxisTags):
     """
     values: list of scalar values across sources (model.reverseMapping order).
-    Returns a VarScalar if they vary, or plain value if static.
+    Returns dict{("axis", loc): delta} for PythonBuilder.make_var_scalar(),
+    or plain value if static across all sources.
     """
     if all(v == values[0] for v in values):
-        return values[0]  # static, no variation
+        return values[0]  # static: plain number
+
     deltas, supports = model.getDeltasAndSupports(values)
-    # Build VarScalar: default=values[0], keyframes from deltas+supports
     keyframes = {}
     for delta, support in zip(deltas[1:], supports[1:]):  # skip default
-        # support is e.g. {"COLOR": (0, 1, 1)} — peak is index 1
+        # support = {"COLOR": (0, 1, 1)} → peakV is index 1 (normalized location)
         for axisName, (minV, peakV, maxV) in support.items():
             tag = globalAxisTags.get(axisName, axisName)
-            keyframes[(tag, peakV)] = delta
-    return VarScalar(values[0], keyframes)
+            keyframes[(tag, peakV)] = (
+                delta  # PythonBuilder.make_var_scalar() expects this format
+            )
+
+    return keyframes  # ← raw dict, NO VarScalar wrapper needed
 
 
 def _merge_node(nodes, default, model, sources, axisTags):
@@ -766,7 +770,6 @@ class Builder:
                     builder.setupGvar(gvarVariations)
         if any(g.hasColorV1 for g in self.glyphInfos.values()):
             print("COLRv1 detected; building paint tables...")
-            from paintcompiler import PythonBuilder
 
             customData = await self.getCustomData() or {}
             palettes = customData.get("com.github.googlei18n.ufo2ft.colorPalettes", [])
@@ -1031,158 +1034,98 @@ class Builder:
         return varStore, advanceMapping, vOrigMapping
 
     def _dataToPaint(self, data, pb):
-        """Recursively convert a Fontra colorv1 JSON dict to a paintcompiler paint dict,
-        using PythonBuilder (pb) methods directly — Paint* are not importable classes.
-        """
-        from paintcompiler import ColorLine
+        """Convert Fontra colorv1 dict → paintcompiler paint objects."""
+        ptype = data.get("type")
 
-        def p(d):
-            return self._dataToPaint(d, pb)
-
-        def colorline(d):
-            # Fontra actual field names (from glyph JSON):
-            #   colorStops list with: stopOffset, paletteIndex, alpha
-            #   extend (optional, default "pad")
-            stops = [
-                (
-                    varscalar(s["stopOffset"]),
-                    (s["paletteIndex"], varscalar(s.get("alpha", 1.0))),
-                )
-                for s in d.get("colorStops", [])
-            ]
-            return ColorLine(stops, extend=d.get("extend", "pad"))
-
-        from paintcompiler import VarScalar
-
-        def varscalar(v):
-            if isinstance(v, VarScalar):
-                return v  # already merged upstream
-            if not isinstance(v, dict):
-                return v  # plain static number
-            # Legacy fallback: inline keyframe format
-            keyframes = v.get("keyframes")
-            if not keyframes:
-                return v.get("default", 0)
-            default = v.get("default", keyframes[0]["value"])
-            values = {
-                (kf["axis"], float(kf["loc"])): float(kf["value"]) for kf in keyframes
-            }
-            return VarScalar(default, values)
-
-        ptype = data.get("type", "PaintColrLayers")
-
-        # --- Layering ---
         if ptype == "PaintColrLayers":
-            return pb.PaintColrLayers([p(layer) for layer in data["layers"]])
+            return pb.PaintColrLayers(
+                [self._dataToPaint(layer, pb) for layer in data["layers"]]
+            )
 
-        # --- Glyph shape ---
         elif ptype == "PaintGlyph":
-            return pb.PaintGlyph(data["glyph"], p(data["paint"]))
+            return pb.PaintGlyph(data["glyph"], self._dataToPaint(data["paint"], pb))
+
         elif ptype == "PaintColrGlyph":
             return pb.PaintColrGlyph(data["glyph"])
 
-        # --- Solid color ---
         elif ptype == "PaintSolid":
-            return pb.PaintSolid(
-                data["paletteIndex"], alpha=varscalar(data.get("alpha", 1.0))
-            )
+            return pb.PaintSolid(data["paletteIndex"], data.get("alpha", 1.0))
 
-        # --- Gradients ---
         elif ptype == "PaintLinearGradient":
-            # Fontra uses x0/y0, x1/y1, x2/y2 as separate fields
-            pt0 = (varscalar(data["x0"]), varscalar(data["y0"]))
-            pt1 = (varscalar(data["x1"]), varscalar(data["y1"]))
-            pt2 = (varscalar(data["x2"]), varscalar(data["y2"]))
-            return pb.PaintLinearGradient(pt0, pt1, pt2, colorline(data["colorLine"]))
-        elif ptype == "PaintRadialGradient":
-            # Fontra uses x0/y0/x1/y1 as separate fields, never p0/p1 tuples
-            pt0 = (varscalar(data["x0"]), varscalar(data["y0"]))
-            pt1 = (varscalar(data["x1"]), varscalar(data["y1"]))
-            return pb.PaintRadialGradient(
-                pt0,
-                varscalar(data["r0"]),
-                pt1,
-                varscalar(data["r1"]),
-                colorline(data["colorLine"]),
-            )
-        elif ptype == "PaintSweepGradient":
-            # Fontra uses centerX/centerY as separate fields
-            center = (varscalar(data["centerX"]), varscalar(data["centerY"]))
-            return pb.PaintSweepGradient(
-                center,
-                varscalar(data["startAngle"]),
-                varscalar(data["endAngle"]),
-                colorline(data["colorLine"]),
+            return pb.PaintLinearGradient(
+                (data["x0"], data["y0"]),
+                (data["x1"], data["y1"]),
+                (data["x2"], data["y2"]),
+                ColorLine(data["colorLine"]),
             )
 
-        # --- Transforms ---
+        elif ptype == "PaintRadialGradient":
+            return pb.PaintRadialGradient(
+                (data["x0"], data["y0"]),
+                data["r0"],
+                (data["x1"], data["y1"]),
+                data["r1"],
+                ColorLine(data["colorLine"]),
+            )
+
+        elif ptype == "PaintSweepGradient":
+            return pb.PaintSweepGradient(
+                (data["centerX"], data["centerY"]),
+                data["startAngle"],
+                data["endAngle"],
+                ColorLine(data["colorLine"]),
+            )
+
         elif ptype == "PaintTranslate":
             return pb.PaintTranslate(
-                varscalar(data.get("dx", 0)),
-                varscalar(data.get("dy", 0)),
-                p(data["paint"]),
-            )
-        elif ptype == "PaintScale":
-            sx = varscalar(data["scaleX"])
-            sy = varscalar(data.get("scaleY", data["scaleX"]))
-            center = (
-                tuple(varscalar(c) for c in data["center"])
-                if "center" in data
-                else None
-            )
-            if center:
-                if data.get("scaleY") is None:
-                    return pb.PaintScaleUniformAroundCenter(
-                        sx, center, p(data["paint"])
-                    )
-                return pb.PaintScaleAroundCenter(sx, sy, center, p(data["paint"]))
-            if data.get("scaleY") is None:
-                return pb.PaintScaleUniform(sx, p(data["paint"]))
-            return pb.PaintScale(scale_x=sx, scale_y=sy, paint=p(data["paint"]))
-        elif ptype == "PaintRotate":
-            center = (
-                tuple(varscalar(c) for c in data["center"])
-                if "center" in data
-                else None
-            )
-            if center:
-                return pb.PaintRotateAroundCenter(
-                    varscalar(data["angle"]), center, p(data["paint"])
-                )
-            return pb.PaintRotate(
-                angle=varscalar(data["angle"]), paint=p(data["paint"])
-            )
-        elif ptype == "PaintSkew":
-            center = (
-                tuple(varscalar(c) for c in data["center"])
-                if "center" in data
-                else None
-            )
-            if center:
-                return pb.PaintSkewAroundCenter(
-                    varscalar(data["angleX"]),
-                    varscalar(data["angleY"]),
-                    center,
-                    p(data["paint"]),
-                )
-            return pb.PaintSkew(
-                varscalar(data["angleX"]), varscalar(data["angleY"]), p(data["paint"])
-            )
-        elif ptype == "PaintTransform":
-            # matrix: [xx, yx, xy, yy, dx, dy] (affine 2x3) — each element may be variable
-            return pb.PaintTransform(
-                [varscalar(v) for v in data["matrix"]], p(data["paint"])
+                data.get("dx", 0),
+                data.get("dy", 0),
+                self._dataToPaint(data["paint"], pb),
             )
 
-        # --- Compositing ---
+        elif ptype == "PaintScale":
+            paint = self._dataToPaint(data["paint"], pb)
+            if "center" in data:
+                center = (data["center"][0], data["center"][1])
+                if "scaleY" in data:
+                    return pb.PaintScaleAroundCenter(
+                        data["scaleX"], data["scaleY"], center, paint
+                    )
+                return pb.PaintScaleUniformAroundCenter(data["scaleX"], center, paint)
+            if "scaleY" not in data:
+                return pb.PaintScaleUniform(data["scaleX"], paint)
+            return pb.PaintScale(data["scaleX"], data["scaleY"], paint)
+
+        elif ptype == "PaintRotate":
+            paint = self._dataToPaint(data["paint"], pb)
+            if "center" in data:
+                center = (data["center"][0], data["center"][1])
+                return pb.PaintRotateAroundCenter(data["angle"], center, paint)
+            return pb.PaintRotate(data["angle"], paint)
+
+        elif ptype == "PaintSkew":
+            paint = self._dataToPaint(data["paint"], pb)
+            if "center" in data:
+                center = (data["center"][0], data["center"][1])
+                return pb.PaintSkewAroundCenter(
+                    data["angleX"], data["angleY"], center, paint
+                )
+            return pb.PaintSkew(data["angleX"], data["angleY"], paint)
+
+        elif ptype == "PaintTransform":
+            return pb.PaintTransform(
+                [data["matrix"][i] for i in range(6)],
+                self._dataToPaint(data["paint"], pb),
+            )
+
         elif ptype == "PaintComposite":
             return pb.PaintComposite(
-                data.get("mode", "SRC_OVER"),
-                p(data["source"]),
-                p(data["backdrop"]),
+                data.get("mode", "src_over"),
+                self._dataToPaint(data["source"], pb),
+                self._dataToPaint(data["backdrop"], pb),
             )
 
-        raise ValueError(f"Unsupported paint type: {ptype!r}")
+        raise ValueError(f"Unsupported paint type: {ptype}")
 
 
 def prepareLocations(glyphSources, defaultLocation, axisDict):
