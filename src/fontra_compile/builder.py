@@ -57,24 +57,32 @@ def merge_paint_sources(
 
 def _merge_scalar(values, model, sources, globalAxisTags):
     """
-    values: list of scalar values across sources (model.reverseMapping order).
-    Returns dict{("axis", loc): delta} for PythonBuilder.make_var_scalar(),
-    or plain value if static across all sources.
+    values: [value_at_source0, value_at_source1] — model.reverseMapping order
+    Returns dict{(axis,loc): value} with actual values at each normalized location,
+    or plain number if static. paintcompiler computes deltas internally.
     """
-    if all(v == values[0] for v in values):
-        return values[0]  # static: plain number
 
+    if all(v == values[0] for v in values[1:]):
+        return values[0]
+
+    # Get normalized locations + deltas from model
+    normalizedLocs = model.locations  # already normalized
     deltas, supports = model.getDeltasAndSupports(values)
-    keyframes = {}
-    for delta, support in zip(deltas[1:], supports[1:]):  # skip default
-        # support = {"COLOR": (0, 1, 1)} → peakV is index 1 (normalized location)
-        for axisName, (minV, peakV, maxV) in support.items():
-            tag = globalAxisTags.get(axisName, axisName)
-            keyframes[(tag, peakV)] = (
-                delta  # PythonBuilder.make_var_scalar() expects this format
-            )
 
-    return keyframes  # ← raw dict, NO VarScalar wrapper needed
+    keyframes = {}
+    for locIndex, loc in enumerate(normalizedLocs):
+        # Build location key as tuple of (tag, value) pairs
+        location_pairs = []
+        for axisName, axisValue in loc.items():
+            tag = globalAxisTags.get(axisName, axisName)
+            location_pairs.append((tag, axisValue))
+        location_key = tuple(location_pairs)
+
+        # Use actual value at this location (not delta)
+        value_at_loc = values[locIndex]
+        keyframes[location_key] = value_at_loc
+
+    return keyframes
 
 
 def _merge_node(nodes, default, model, sources, axisTags):
@@ -246,6 +254,23 @@ def _merge_colorline(colorlines, model, sources, axisTags):
             }
         )
     return {"colorStops": merged_stops, "extend": default.get("extend", "pad")}
+
+
+def _buildColorLine(colorLineData):
+    """Convert Fontra colorLine dict → paintcompiler ColorLine."""
+    stops = colorLineData.get("colorStops", [])
+    extend = colorLineData.get("extend", "pad")
+    compiled_stops = [
+        (
+            stop["stopOffset"],  # offset: plain number or variation dict
+            (
+                stop["paletteIndex"],  # color: palette index int
+                stop.get("alpha", 1.0),  # alpha: packed with color as tuple
+            ),
+        )
+        for stop in stops
+    ]
+    return ColorLine(compiled_stops, extend=extend)
 
 
 class InterpolationError(Exception):
@@ -804,17 +829,24 @@ class Builder:
                     continue
                 glyphInfo = self.glyphInfos[glyphName]
                 sourceGlyph = await self.getSourceGlyph(glyphName)
-
+                # DEBUG
                 if len(layerPaints) > 1 and glyphInfo.model is not None:
-                    # Multi-source: merge across layers into VarScalar paint dict
+                    activeSources = filterActiveSources(sourceGlyph.sources)
+                    normalizedLocs = [
+                        normalizeLocation(
+                            {**self.defaultLocation, **source.location},
+                            self.globalAxisDict,
+                        )
+                        for source in activeSources
+                    ]
+                    colorModel = VariationModel(normalizedLocs)
                     paintDict = merge_paint_sources(
                         layerPaints,
-                        filterActiveSources(sourceGlyph.sources),
-                        glyphInfo.model,
+                        activeSources,
+                        colorModel,  # ← normalized model
                         self.globalAxisTags,
                     )
                 else:
-                    # Single source or no model: use default layer directly
                     defaultLayerName = filterActiveSources(sourceGlyph.sources)[
                         0
                     ].layerName
@@ -824,8 +856,8 @@ class Builder:
 
                 colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
 
-            pb.buildcolr(colorGlyphs)
-            pb.buildpalette()
+            pb.build_colr(colorGlyphs)
+            pb.build_palette()
         else:
             charStrings = getGlyphInfoAttributes(self.glyphInfos, "charString")
             charStringSupports = getGlyphInfoAttributes(
@@ -1056,7 +1088,7 @@ class Builder:
                 (data["x0"], data["y0"]),
                 (data["x1"], data["y1"]),
                 (data["x2"], data["y2"]),
-                ColorLine(data["colorLine"]),
+                _buildColorLine(data["colorLine"]),
             )
 
         elif ptype == "PaintRadialGradient":
@@ -1065,7 +1097,7 @@ class Builder:
                 data["r0"],
                 (data["x1"], data["y1"]),
                 data["r1"],
-                ColorLine(data["colorLine"]),
+                _buildColorLine(data["colorLine"]),
             )
 
         elif ptype == "PaintSweepGradient":
@@ -1073,7 +1105,7 @@ class Builder:
                 (data["centerX"], data["centerY"]),
                 data["startAngle"],
                 data["endAngle"],
-                ColorLine(data["colorLine"]),
+                _buildColorLine(data["colorLine"]),
             )
 
         elif ptype == "PaintTranslate":
