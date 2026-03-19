@@ -56,31 +56,19 @@ def merge_paint_sources(
 
 
 def _merge_scalar(values, model, sources, globalAxisTags):
-    """
-    values: [value_at_source0, value_at_source1] — model.reverseMapping order
-    Returns dict{(axis,loc): value} with actual values at each normalized location,
-    or plain number if static. paintcompiler computes deltas internally.
-    """
-
     if all(v == values[0] for v in values[1:]):
         return values[0]
 
-    # Get normalized locations + deltas from model
-    normalizedLocs = model.locations  # already normalized
-    deltas, supports = model.getDeltasAndSupports(values)
+    # Reorder values into model-internal order
+    reorderedValues = [values[i] for i in model.reverseMapping]
 
     keyframes = {}
-    for locIndex, loc in enumerate(normalizedLocs):
-        # Build location key as tuple of (tag, value) pairs
-        location_pairs = []
-        for axisName, axisValue in loc.items():
-            tag = globalAxisTags.get(axisName, axisName)
-            location_pairs.append((tag, axisValue))
-        location_key = tuple(location_pairs)
-
-        # Use actual value at this location (not delta)
-        value_at_loc = values[locIndex]
-        keyframes[location_key] = value_at_loc
+    for locIndex, loc in enumerate(model.locations):
+        location_key = tuple(
+            (globalAxisTags.get(axisName, axisName), axisValue)
+            for axisName, axisValue in sorted(loc.items())
+        )
+        keyframes[location_key] = reorderedValues[locIndex]
 
     return keyframes
 
@@ -829,14 +817,16 @@ class Builder:
                     continue
                 glyphInfo = self.glyphInfos[glyphName]
                 sourceGlyph = await self.getSourceGlyph(glyphName)
-                # DEBUG
                 if len(layerPaints) > 1 and glyphInfo.model is not None:
                     activeSources = filterActiveSources(sourceGlyph.sources)
                     normalizedLocs = [
-                        normalizeLocation(
-                            {**self.defaultLocation, **source.location},
-                            self.globalAxisDict,
-                        )
+                        {
+                            self.globalAxisTags.get(k, k): v
+                            for k, v in {
+                                **self.defaultLocation,
+                                **source.location,
+                            }.items()
+                        }
                         for source in activeSources
                     ]
                     colorModel = VariationModel(normalizedLocs)
