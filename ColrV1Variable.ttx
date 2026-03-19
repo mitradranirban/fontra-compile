@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ttFont sfntVersion="\x00\x01\x00\x00" ttLibVersion="4.62">
+
+  <COLR>
+    <Version value="1"/>
+    <!-- BaseGlyphRecordCount=0 -->
+    <!-- LayerRecordCount=0 -->
+    <BaseGlyphList>
+      <!-- BaseGlyphCount=1 -->
+      <BaseGlyphPaintRecord index="0">
+        <BaseGlyph value="A"/>
+        <Paint Format="10"><!-- PaintGlyph -->
+          <Paint Format="5"><!-- PaintVarLinearGradient -->
+            <ColorLine>
+              <Extend value="pad"/>
+              <!-- StopCount=3 -->
+              <ColorStop index="0">
+                <StopOffset value="0.0"/>
+                <PaletteIndex value="0"/>
+                <Alpha value="1.0"/>
+                <VarIndexBase value="6"/>
+              </ColorStop>
+              <ColorStop index="1">
+                <StopOffset value="0.5"/>
+                <PaletteIndex value="1"/>
+                <Alpha value="0.5"/>
+                <VarIndexBase value="8"/>
+              </ColorStop>
+              <ColorStop index="2">
+                <StopOffset value="1.0"/>
+                <PaletteIndex value="2"/>
+                <Alpha value="1.0"/>
+                <VarIndexBase value="10"/>
+              </ColorStop>
+            </ColorLine>
+            <x0 value="64"/>
+            <y0 value="193"/>
+            <x1 value="285"/>
+            <y1 value="467"/>
+            <x2 value="420"/>
+            <y2 value="665"/>
+            <VarIndexBase value="0"/>
+          </Paint>
+          <Glyph value="A"/>
+        </Paint>
+      </BaseGlyphPaintRecord>
+    </BaseGlyphList>
+    <VarIndexMap Format="0">
+      <!-- Omitted values default to 0xFFFF/0xFFFF (no variations) -->
+      <Map index="0" outer="0" inner="3"/>
+      <Map index="1" outer="0" inner="5"/>
+      <Map index="2" outer="0" inner="2"/>
+      <Map index="3" outer="0" inner="1"/>
+      <Map index="4" outer="0" inner="4"/>
+      <Map index="5" outer="0" inner="0"/>
+      <Map index="6"/>
+      <Map index="7"/>
+      <Map index="8"/>
+      <Map index="9"/>
+      <Map index="10"/>
+      <Map index="11"/>
+    </VarIndexMap>
+    <VarStore Format="1">
+      <Format value="1"/>
+      <VarRegionList>
+        <!-- RegionAxisCount=1 -->
+        <!-- RegionCount=1 -->
+        <Region index="0">
+          <VarRegionAxis index="0">
+            <StartCoord value="0.0"/>
+            <PeakCoord value="1.0"/>
+            <EndCoord value="1.0"/>
+          </VarRegionAxis>
+        </Region>
+      </VarRegionList>
+      <!-- VarDataCount=1 -->
+      <VarData index="0">
+        <!-- ItemCount=6 -->
+        <NumShorts value="1"/>
+        <!-- VarRegionCount=1 -->
+        <VarRegionIndex index="0" value="0"/>
+        <Item index="0" value="[-593]"/>
+        <Item index="1" value="[-151]"/>
+        <Item index="2" value="[-9]"/>
+        <Item index="3" value="[3]"/>
+        <Item index="4" value="[16]"/>
+        <Item index="5" value="[416]"/>
+      </VarData>
+    </VarStore>
+  </COLR>
+
+</ttFont>

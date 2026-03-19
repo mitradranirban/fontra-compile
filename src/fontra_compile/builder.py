@@ -42,51 +42,67 @@ def merge_paint_sources(
     sources,  # glyph.sources (ordered)
     model: VariationModel,
     globalAxisTags: dict,  # name→tag
+    userSpaceLocs: list,  # user-space locations keyed by axis tag, one per source
 ) -> dict:
     """
     Given one colorv1 paint dict per source layer, return a single
-    merged paint dict where varying scalar field
+    merged paint dict where varying scalar fields become variation dicts.
     """
-    # Order paints to match model's reverseMapping (default first)
     orderedPaints = [
         layerPaints.get(sources[i].layerName) for i in model.reverseMapping
     ]
     defaultPaint = orderedPaints[0]
-    return _merge_node(orderedPaints, defaultPaint, model, sources, globalAxisTags)
+    return _merge_node(
+        orderedPaints, defaultPaint, model, sources, globalAxisTags, userSpaceLocs
+    )
 
 
-def _merge_scalar(values, model, sources, globalAxisTags):
+def _merge_scalar(values, model, sources, globalAxisTags, userSpaceLocs):
     if all(v == values[0] for v in values[1:]):
         return values[0]
 
-    # Reorder values into model-internal order
+    # Reorder values and locations into model-internal order.
+    # Use userSpaceLocs (explicit user-space axis values) instead of
+    # model.locations which collapses the default location to {} — that
+    # empty tuple causes paintcompiler to inject a spurious duplicate
+    # default entry, making VariationModel crash with "Locations must be
+    # unique" on fontTools >= 4.62.1.
     reorderedValues = [values[i] for i in model.reverseMapping]
+    reorderedLocs = [userSpaceLocs[i] for i in model.reverseMapping]
 
     keyframes = {}
-    for locIndex, loc in enumerate(model.locations):
-        location_key = tuple(
-            (globalAxisTags.get(axisName, axisName), axisValue)
-            for axisName, axisValue in sorted(loc.items())
-        )
+    for locIndex, loc in enumerate(reorderedLocs):
+        location_key = tuple(sorted(loc.items()))
         keyframes[location_key] = reorderedValues[locIndex]
 
     return keyframes
 
 
-def _merge_node(nodes, default, model, sources, axisTags):
+def _merge_node(nodes, default, model, sources, axisTags, userSpaceLocs):
     ptype = default.get("type")
 
     def ms(key):
-        return _merge_scalar([n[key] for n in nodes], model, sources, axisTags)
+        return _merge_scalar(
+            [n[key] for n in nodes], model, sources, axisTags, userSpaceLocs
+        )
 
     def ms_opt(key, fallback=0):
         return _merge_scalar(
-            [n.get(key, fallback) for n in nodes], model, sources, axisTags
+            [n.get(key, fallback) for n in nodes],
+            model,
+            sources,
+            axisTags,
+            userSpaceLocs,
         )
 
     def recurse(key):
         return _merge_node(
-            [n[key] for n in nodes], default[key], model, sources, axisTags
+            [n[key] for n in nodes],
+            default[key],
+            model,
+            sources,
+            axisTags,
+            userSpaceLocs,
         )
 
     if ptype == "PaintColrLayers":
@@ -99,6 +115,7 @@ def _merge_node(nodes, default, model, sources, axisTags):
                     model,
                     sources,
                     axisTags,
+                    userSpaceLocs,
                 )
                 for i in range(len(default["layers"]))
             ],
@@ -127,7 +144,7 @@ def _merge_node(nodes, default, model, sources, axisTags):
             "x2": ms("x2"),
             "y2": ms("y2"),
             "colorLine": _merge_colorline(
-                [n["colorLine"] for n in nodes], model, sources, axisTags
+                [n["colorLine"] for n in nodes], model, sources, axisTags, userSpaceLocs
             ),
         }
 
@@ -141,7 +158,7 @@ def _merge_node(nodes, default, model, sources, axisTags):
             "y1": ms("y1"),
             "r1": ms("r1"),
             "colorLine": _merge_colorline(
-                [n["colorLine"] for n in nodes], model, sources, axisTags
+                [n["colorLine"] for n in nodes], model, sources, axisTags, userSpaceLocs
             ),
         }
 
@@ -153,7 +170,7 @@ def _merge_node(nodes, default, model, sources, axisTags):
             "startAngle": ms("startAngle"),
             "endAngle": ms("endAngle"),
             "colorLine": _merge_colorline(
-                [n["colorLine"] for n in nodes], model, sources, axisTags
+                [n["colorLine"] for n in nodes], model, sources, axisTags, userSpaceLocs
             ),
         }
 
@@ -171,7 +188,13 @@ def _merge_node(nodes, default, model, sources, axisTags):
             node["scaleY"] = ms("scaleY")
         if "center" in default:
             node["center"] = [
-                _merge_scalar([n["center"][i] for n in nodes], model, sources, axisTags)
+                _merge_scalar(
+                    [n["center"][i] for n in nodes],
+                    model,
+                    sources,
+                    axisTags,
+                    userSpaceLocs,
+                )
                 for i in range(2)
             ]
         return node
@@ -180,7 +203,13 @@ def _merge_node(nodes, default, model, sources, axisTags):
         node = {"type": ptype, "angle": ms("angle"), "paint": recurse("paint")}
         if "center" in default:
             node["center"] = [
-                _merge_scalar([n["center"][i] for n in nodes], model, sources, axisTags)
+                _merge_scalar(
+                    [n["center"][i] for n in nodes],
+                    model,
+                    sources,
+                    axisTags,
+                    userSpaceLocs,
+                )
                 for i in range(2)
             ]
         return node
@@ -194,7 +223,13 @@ def _merge_node(nodes, default, model, sources, axisTags):
         }
         if "center" in default:
             node["center"] = [
-                _merge_scalar([n["center"][i] for n in nodes], model, sources, axisTags)
+                _merge_scalar(
+                    [n["center"][i] for n in nodes],
+                    model,
+                    sources,
+                    axisTags,
+                    userSpaceLocs,
+                )
                 for i in range(2)
             ]
         return node
@@ -203,7 +238,13 @@ def _merge_node(nodes, default, model, sources, axisTags):
         return {
             "type": ptype,
             "matrix": [
-                _merge_scalar([n["matrix"][i] for n in nodes], model, sources, axisTags)
+                _merge_scalar(
+                    [n["matrix"][i] for n in nodes],
+                    model,
+                    sources,
+                    axisTags,
+                    userSpaceLocs,
+                )
                 for i in range(6)
             ],
             "paint": recurse("paint"),
@@ -220,7 +261,7 @@ def _merge_node(nodes, default, model, sources, axisTags):
     return default  # unknown type — pass through static
 
 
-def _merge_colorline(colorlines, model, sources, axisTags):
+def _merge_colorline(colorlines, model, sources, axisTags, userSpaceLocs):
     default = colorlines[0]
     merged_stops = []
     for i, stop in enumerate(default["colorStops"]):
@@ -232,12 +273,14 @@ def _merge_colorline(colorlines, model, sources, axisTags):
                     model,
                     sources,
                     axisTags,
+                    userSpaceLocs,
                 ),
                 "alpha": _merge_scalar(
                     [cl["colorStops"][i]["alpha"] for cl in colorlines],
                     model,
                     sources,
                     axisTags,
+                    userSpaceLocs,
                 ),
             }
         )
@@ -819,7 +862,7 @@ class Builder:
                 sourceGlyph = await self.getSourceGlyph(glyphName)
                 if len(layerPaints) > 1 and glyphInfo.model is not None:
                     activeSources = filterActiveSources(sourceGlyph.sources)
-                    normalizedLocs = [
+                    userSpaceLocs = [
                         {
                             self.globalAxisTags.get(k, k): v
                             for k, v in {
@@ -829,12 +872,13 @@ class Builder:
                         }
                         for source in activeSources
                     ]
-                    colorModel = VariationModel(normalizedLocs)
+                    colorModel = VariationModel(userSpaceLocs)
                     paintDict = merge_paint_sources(
                         layerPaints,
                         activeSources,
-                        colorModel,  # ← normalized model
+                        colorModel,
                         self.globalAxisTags,
+                        userSpaceLocs,
                     )
                 else:
                     defaultLayerName = filterActiveSources(sourceGlyph.sources)[
