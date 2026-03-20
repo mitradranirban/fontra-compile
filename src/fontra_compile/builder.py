@@ -478,6 +478,22 @@ class Builder:
         except Exception:
             return {}
 
+    async def getFontData(self) -> dict:
+        """Read full font-data.json, bypassing the Fontra backend."""
+        import json
+        import pathlib
+
+        backendPath = getattr(self.reader, "path", None)
+        if backendPath is None:
+            return {}
+        fontDataFile = pathlib.Path(backendPath) / "font-data.json"
+        if not fontDataFile.is_file():
+            return {}
+        try:
+            return json.loads(fontDataFile.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
     async def getRawColorV1Data(self) -> dict:
         import json
         import pathlib
@@ -905,19 +921,50 @@ class Builder:
             varcTable = self.buildVARC(axisTags)
             builder.font["VARC"] = varcTable
 
-        builder.setupHorizontalHeader()
+        _font_data = await self.getFontData()
+        customData = await self.getCustomData() or {}
+
+        # font-info metrics are under sources (same in all sources, use first)
+        _font_info = _font_data.get("fontInfo", {})
+        _src = next(iter(customData.get("sources", {}).values()), {})
+        _lm = _src.get("lineMetricsHorizontalLayout", {})
+        _cd = _src.get("customData", {})
+
+        def _lv(key, fallback=0):
+            return _lm.get(key, {}).get("value", fallback)
+
+        ascender = _lv("ascender", 800)
+        descender = _lv("descender", -200)
+
+        builder.setupHorizontalHeader(
+            ascent=_cd.get("openTypeHheaAscender", ascender),
+            descent=_cd.get("openTypeHheaDescender", descender),
+            lineGap=_cd.get("openTypeHheaLineGap", 0),
+        )
         builder.setupHorizontalMetrics(
             dictZip(
                 getGlyphInfoAttributes(self.glyphInfos, "xAdvance"),
                 getGlyphInfoAttributes(self.glyphInfos, "leftSideBearing"),
             )
         )
+        builder.setupCharacterMap(self.cmap)
+        builder.setupOS2(
+            sTypoAscender=_cd.get("openTypeOS2TypoAscender", ascender),
+            sTypoDescender=_cd.get("openTypeOS2TypoDescender", descender),
+            sTypoLineGap=_cd.get("openTypeOS2TypoLineGap", 0),
+            usWinAscent=_cd.get("openTypeOS2WinAscent", ascender),
+            usWinDescent=_cd.get("openTypeOS2WinDescent", abs(descender)),
+        )
+
         hvarTable = self.buildHVAR(axisTags)
         builder.font["HVAR"] = hvarTable
 
-        builder.setupCharacterMap(self.cmap)
-        builder.setupOS2()
-        builder.setupPost()
+        builder.setupPost(
+            italicAngle=_font_info.get("italicAngle", 0),
+            underlinePosition=_font_info.get("postscriptUnderlinePosition", -75),
+            underlineThickness=_font_info.get("postscriptUnderlineThickness", 50),
+            isFixedPitch=int(_font_info.get("postscriptIsFixedPitch", False)),
+        )
 
         if self.buildCFF2 and self.subroutinize:
             cffsubr.subroutinize(builder.font)
