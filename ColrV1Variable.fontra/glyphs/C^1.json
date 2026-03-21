@@ -1,0 +1,191 @@
+{
+"name": "C",
+"sources": [
+{
+"name": "",
+"layerName": "cda96ce1",
+"locationBase": "cda96ce1"
+},
+{
+"name": "COLOR=100",
+"layerName": "COLOR=100",
+"location": {
+"COLOR": 100
+}
+}
+],
+"layers": {
+"COLOR=100": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 7,
+"y": 744
+},
+{
+"x": 7,
+"y": 743
+},
+{
+"x": 4,
+"y": 743
+},
+{
+"x": 4,
+"y": -6
+},
+{
+"x": 501,
+"y": -6
+},
+{
+"x": 501,
+"y": 208
+},
+{
+"x": 281,
+"y": 208
+},
+{
+"x": 281,
+"y": 499
+},
+{
+"x": 495,
+"y": 499
+},
+{
+"x": 495,
+"y": 744
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 500,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "C",
+"paint": {
+"centerX": 250,
+"centerY": 414,
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 1,
+"paletteIndex": 1,
+"stopOffset": 1
+}
+]
+},
+"endAngle": 0.9958993816476125,
+"startAngle": 0.7028095757018098,
+"type": "PaintSweepGradient"
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+},
+"cda96ce1": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 7,
+"y": 744
+},
+{
+"x": 7,
+"y": 743
+},
+{
+"x": 4,
+"y": 743
+},
+{
+"x": 4,
+"y": -6
+},
+{
+"x": 501,
+"y": -6
+},
+{
+"x": 501,
+"y": 208
+},
+{
+"x": 281,
+"y": 208
+},
+{
+"x": 281,
+"y": 499
+},
+{
+"x": 495,
+"y": 499
+},
+{
+"x": 495,
+"y": 744
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 500,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "C",
+"paint": {
+"centerX": 250,
+"centerY": 414,
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 1,
+"paletteIndex": 1,
+"stopOffset": 1
+}
+]
+},
+"endAngle": 0.7570851810148698,
+"startAngle": 0.3225233971010544,
+"type": "PaintSweepGradient"
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+}
+}
+}
