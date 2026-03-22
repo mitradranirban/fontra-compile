@@ -1,0 +1,295 @@
+{
+"name": "B",
+"sources": [
+{
+"name": "",
+"layerName": "cda96ce1",
+"locationBase": "cda96ce1"
+},
+{
+"name": "COLOR=100",
+"layerName": "COLOR=100",
+"location": {
+"COLOR": 100
+}
+}
+],
+"layers": {
+"COLOR=100": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 9,
+"y": 742
+},
+{
+"x": 9,
+"y": 394
+},
+{
+"x": 10,
+"y": 394
+},
+{
+"x": 10,
+"y": 38
+},
+{
+"x": 13,
+"y": 38
+},
+{
+"x": 13,
+"y": -2
+},
+{
+"x": 492,
+"y": -2
+},
+{
+"x": 492,
+"y": 335
+},
+{
+"x": 262,
+"y": 335
+},
+{
+"x": 262,
+"y": 394
+},
+{
+"x": 495,
+"y": 394
+},
+{
+"x": 495,
+"y": 742
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 177,
+"y": 621
+},
+{
+"x": 391,
+"y": 621
+},
+{
+"x": 391,
+"y": 494
+},
+{
+"x": 177,
+"y": 494
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 191,
+"y": 205
+},
+{
+"x": 405,
+"y": 205
+},
+{
+"x": 405,
+"y": 61
+},
+{
+"x": 191,
+"y": 61
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 500,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "B",
+"paint": {
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 1,
+"paletteIndex": 1,
+"stopOffset": 1
+}
+]
+},
+"type": "PaintLinearGradient",
+"x0": 32,
+"x1": 256,
+"x2": 478,
+"y0": 306,
+"y1": 729,
+"y2": 292
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+},
+"cda96ce1": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 9,
+"y": 742
+},
+{
+"x": 9,
+"y": 394
+},
+{
+"x": 10,
+"y": 394
+},
+{
+"x": 10,
+"y": 38
+},
+{
+"x": 13,
+"y": 38
+},
+{
+"x": 13,
+"y": -2
+},
+{
+"x": 492,
+"y": -2
+},
+{
+"x": 492,
+"y": 335
+},
+{
+"x": 262,
+"y": 335
+},
+{
+"x": 262,
+"y": 394
+},
+{
+"x": 495,
+"y": 394
+},
+{
+"x": 495,
+"y": 742
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 177,
+"y": 621
+},
+{
+"x": 391,
+"y": 621
+},
+{
+"x": 391,
+"y": 494
+},
+{
+"x": 177,
+"y": 494
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 191,
+"y": 205
+},
+{
+"x": 405,
+"y": 205
+},
+{
+"x": 405,
+"y": 61
+},
+{
+"x": 191,
+"y": 61
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 500,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "B",
+"paint": {
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 1,
+"paletteIndex": 1,
+"stopOffset": 1
+}
+]
+},
+"type": "PaintLinearGradient",
+"x0": 26,
+"x1": 248,
+"x2": 468,
+"y0": 8,
+"y1": 450,
+"y2": 32
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+}
+}
+}
