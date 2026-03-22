@@ -1,231 +1,241 @@
 {
-  "name": "A",
-  "sources": [
-    {
-      "name": "",
-      "layerName": "cda96ce1",
-      "locationBase": "cda96ce1"
-    },
-    {
-      "name": "COLOR=100",
-      "layerName": "COLOR=100",
-      "location": {
-        "COLOR": 100
-      }
-    }
-  ],
-  "layers": {
-    "COLOR=100": {
-      "glyph": {
-        "path": {
-          "contours": [
-            {
-              "points": [
-                {
-                  "x": 27,
-                  "y": 730
-                },
-                {
-                  "x": 27,
-                  "y": -6
-                },
-                {
-                  "x": 460,
-                  "y": -6
-                },
-                {
-                  "x": 460,
-                  "y": 730
-                }
-              ],
-              "isClosed": true
-            },
-            {
-              "points": [
-                {
-                  "x": 130,
-                  "y": 584
-                },
-                {
-                  "x": 374,
-                  "y": 584
-                },
-                {
-                  "x": 374,
-                  "y": 428
-                },
-                {
-                  "x": 130,
-                  "y": 428
-                }
-              ],
-              "isClosed": true
-            },
-            {
-              "points": [
-                {
-                  "x": 127,
-                  "y": 285
-                },
-                {
-                  "x": 374,
-                  "y": 285
-                },
-                {
-                  "x": 374,
-                  "y": -6
-                },
-                {
-                  "x": 127,
-                  "y": -6
-                }
-              ],
-              "isClosed": true
-            }
-          ]
-        },
-        "xAdvance": 500,
-        "customData": {
-          "colorv1": {
-            "layers": [
-              {
-                "glyph": "A",
-                "paint": {
-                  "colorLine": {
-                    "colorStops": [
-                      {
-                        "alpha": 1,
-                        "paletteIndex": 0,
-                        "stopOffset": 0
-                      },
-                      {
-                        "alpha": 1,
-                        "paletteIndex": 1,
-                        "stopOffset": 1
-                      }
-                    ]
-                  },
-                  "r0": 0,
-                  "r1": 250,
-                  "type": "PaintRadialGradient",
-                  "x0": 235,
-                  "x1": 424,
-                  "y0": 373,
-                  "y1": 338
-                },
-                "type": "PaintGlyph"
-              }
-            ],
-            "type": "PaintColrLayers"
-          }
-        }
-      }
-    },
-    "cda96ce1": {
-      "glyph": {
-        "path": {
-          "contours": [
-            {
-              "points": [
-                {
-                  "x": 27,
-                  "y": 730
-                },
-                {
-                  "x": 27,
-                  "y": -6
-                },
-                {
-                  "x": 460,
-                  "y": -6
-                },
-                {
-                  "x": 460,
-                  "y": 730
-                }
-              ],
-              "isClosed": true
-            },
-            {
-              "points": [
-                {
-                  "x": 130,
-                  "y": 584
-                },
-                {
-                  "x": 374,
-                  "y": 584
-                },
-                {
-                  "x": 374,
-                  "y": 428
-                },
-                {
-                  "x": 130,
-                  "y": 428
-                }
-              ],
-              "isClosed": true
-            },
-            {
-              "points": [
-                {
-                  "x": 127,
-                  "y": 285
-                },
-                {
-                  "x": 374,
-                  "y": 285
-                },
-                {
-                  "x": 374,
-                  "y": -6
-                },
-                {
-                  "x": 127,
-                  "y": -6
-                }
-              ],
-              "isClosed": true
-            }
-          ]
-        },
-        "xAdvance": 500,
-        "customData": {
-          "colorv1": {
-            "layers": [
-              {
-                "glyph": "A",
-                "paint": {
-                  "colorLine": {
-                    "colorStops": [
-                      {
-                        "alpha": 1,
-                        "paletteIndex": 0,
-                        "stopOffset": 0
-                      },
-                      {
-                        "alpha": 1,
-                        "paletteIndex": 1,
-                        "stopOffset": 1
-                      }
-                    ]
-                  },
-                  "r0": 0,
-                  "r1": 250,
-                  "type": "PaintRadialGradient",
-                  "x0": 235,
-                  "x1": 93,
-                  "y0": 373,
-                  "y1": 308
-                },
-                "type": "PaintGlyph"
-              }
-            ],
-            "type": "PaintColrLayers"
-          }
-        }
-      }
-    }
-  }
+"name": "A",
+"sources": [
+{
+"name": "",
+"layerName": "cda96ce1",
+"locationBase": "cda96ce1"
+},
+{
+"name": "COLOR=100",
+"layerName": "COLOR=100",
+"location": {
+"COLOR": 100
+}
+}
+],
+"layers": {
+"COLOR=100": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 27,
+"y": 730
+},
+{
+"x": 27,
+"y": -6
+},
+{
+"x": 460,
+"y": -6
+},
+{
+"x": 460,
+"y": 730
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 130,
+"y": 584
+},
+{
+"x": 374,
+"y": 584
+},
+{
+"x": 374,
+"y": 428
+},
+{
+"x": 130,
+"y": 428
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 127,
+"y": 285
+},
+{
+"x": 374,
+"y": 285
+},
+{
+"x": 374,
+"y": -6
+},
+{
+"x": 127,
+"y": -6
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 500,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "A",
+"paint": {
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 0.5,
+"paletteIndex": 1,
+"stopOffset": 0.5
+},
+{
+"alpha": 1,
+"paletteIndex": 2,
+"stopOffset": 1
+}
+]
+},
+"type": "PaintLinearGradient",
+"x0": 67,
+"x1": 276,
+"x2": 436,
+"y0": 609,
+"y1": 316,
+"y2": 72
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+},
+"cda96ce1": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 27,
+"y": 730
+},
+{
+"x": 27,
+"y": -6
+},
+{
+"x": 460,
+"y": -6
+},
+{
+"x": 460,
+"y": 730
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 130,
+"y": 584
+},
+{
+"x": 374,
+"y": 584
+},
+{
+"x": 374,
+"y": 428
+},
+{
+"x": 130,
+"y": 428
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 127,
+"y": 285
+},
+{
+"x": 374,
+"y": 285
+},
+{
+"x": 374,
+"y": -6
+},
+{
+"x": 127,
+"y": -6
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 500,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "A",
+"paint": {
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 0.5,
+"paletteIndex": 1,
+"stopOffset": 0.5
+},
+{
+"alpha": 1,
+"paletteIndex": 2,
+"stopOffset": 1
+}
+]
+},
+"type": "PaintLinearGradient",
+"x0": 64,
+"x1": 285,
+"x2": 420,
+"y0": 193,
+"y1": 467,
+"y2": 665
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+}
+}
 }

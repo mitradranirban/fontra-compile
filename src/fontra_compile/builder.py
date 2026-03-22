@@ -167,21 +167,8 @@ def _merge_node(nodes, default, model, sources, axisTags, userSpaceLocs):
             "type": ptype,
             "centerX": ms("centerX"),
             "centerY": ms("centerY"),
-            # Scale from turns (Fontra) to degrees (paintcompiler) during merge
-            "startAngle": _merge_scalar(
-                [n.get("startAngle", 0.0) * 360.0 for n in nodes],
-                model,
-                sources,
-                axisTags,
-                userSpaceLocs,
-            ),
-            "endAngle": _merge_scalar(
-                [n.get("endAngle", 0.0) * 360.0 for n in nodes],
-                model,
-                sources,
-                axisTags,
-                userSpaceLocs,
-            ),
+            "startAngle": ms("startAngle"),
+            "endAngle": ms("endAngle"),
             "colorLine": _merge_colorline(
                 [n["colorLine"] for n in nodes], model, sources, axisTags, userSpaceLocs
             ),

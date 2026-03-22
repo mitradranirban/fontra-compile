@@ -1,65 +1,90 @@
 {
-  "fontInfo": {
-    "familyName": "ColrV1Variable",
-    "versionMajor": 0,
-    "versionMinor": 1
-  },
-  "axes": {
-    "axes": [
-      {
-        "name": "COLOR",
-        "label": "Color",
-        "tag": "COLR",
-        "minValue": 0,
-        "defaultValue": 0,
-        "maxValue": 100
-      }
-    ]
-  },
-  "sources": {
-    "cda96ce1": {
-      "name": "Regular",
-      "lineMetricsHorizontalLayout": {
-        "ascender": {
-          "value": 750,
-          "zone": 16
-        },
-        "descender": {
-          "value": -250,
-          "zone": -16
-        },
-        "xHeight": {
-          "value": 500,
-          "zone": 16
-        },
-        "capHeight": {
-          "value": 750,
-          "zone": 16
-        },
-        "baseline": {
-          "value": 0,
-          "zone": -16
-        }
-      }
-    }
-  },
-  "customData": {
-    "com.github.googlei18n.ufo2ft.colorPalettes": [
-      [
-        [0.8235294117647058, 0.058823529411764705, 0.058823529411764705, 1],
-        [0.08627450980392157, 0.6941176470588235, 0.34901960784313724, 1],
-        [0.13333333333333333, 0.3176470588235294, 0.7490196078431373, 1],
-        [0.4470588235294118, 0.14901960784313725, 0.8117647058823529, 1],
-        [0.796078431372549, 0.39215686274509803, 0.06274509803921569, 1]
-      ]
-    ],
-    "fontra.projectGlyphSets": [
-      {
-        "commentChars": "#",
-        "dataFormat": "glyph-names",
-        "name": "GF Latin Kernel",
-        "url": "https://cdn.jsdelivr.net/gh/googlefonts/glyphsets/data/results/txt/nice-names/GF_Latin_Kernel.txt"
-      }
-    ]
-  }
+"fontInfo": {
+"familyName": "ColrV1Variable",
+"versionMajor": 0,
+"versionMinor": 1
+},
+"axes": {
+"axes": [
+{
+"name": "COLOR",
+"label": "Color",
+"tag": "COLR",
+"minValue": 0,
+"defaultValue": 0,
+"maxValue": 100
+}
+]
+},
+"sources": {
+"cda96ce1": {
+"name": "Regular",
+"lineMetricsHorizontalLayout": {
+"ascender": {
+"value": 750,
+"zone": 16
+},
+"descender": {
+"value": -250,
+"zone": -16
+},
+"xHeight": {
+"value": 500,
+"zone": 16
+},
+"capHeight": {
+"value": 750,
+"zone": 16
+},
+"baseline": {
+"value": 0,
+"zone": -16
+}
+}
+}
+},
+"customData": {
+"com.github.googlei18n.ufo2ft.colorPalettes": [
+[
+[
+0.8235294117647058,
+0.058823529411764705,
+0.058823529411764705,
+1
+],
+[
+0.08627450980392157,
+0.6941176470588235,
+0.34901960784313724,
+1
+],
+[
+0.13333333333333333,
+0.3176470588235294,
+0.7490196078431373,
+1
+],
+[
+0.4470588235294118,
+0.14901960784313725,
+0.8117647058823529,
+1
+],
+[
+0.796078431372549,
+0.39215686274509803,
+0.06274509803921569,
+1
+]
+]
+],
+"fontra.projectGlyphSets": [
+{
+"commentChars": "#",
+"dataFormat": "glyph-names",
+"name": "GF Latin Kernel",
+"url": "https://cdn.jsdelivr.net/gh/googlefonts/glyphsets/data/results/txt/nice-names/GF_Latin_Kernel.txt"
+}
+]
+}
 }
