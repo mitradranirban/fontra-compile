@@ -36,6 +36,8 @@ async def main_async() -> None:
     )
     await builder.setup()
     ttFont = await builder.build()
+    if outputFontPath.suffix.lower() == ".woff2":
+        ttFont.flavor = "woff2"
     ttFont.save(outputFontPath)
 
 

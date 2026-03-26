@@ -1,0 +1,42 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>com.github.googlei18n.ufo2ft.colorPalettes</key>
+    <array>
+      <array>
+        <array>
+          <real>0.4196078431372549</real>
+          <real>0.2980392156862745</real>
+          <real>0.2980392156862745</real>
+          <integer>1</integer>
+        </array>
+        <array>
+          <real>0.9058823529411765</real>
+          <real>0.07450980392156863</real>
+          <real>0.07450980392156863</real>
+          <integer>1</integer>
+        </array>
+        <array>
+          <real>0.9803921568627451</real>
+          <real>0.9764705882352941</real>
+          <real>0.9764705882352941</real>
+          <real>0.4</real>
+        </array>
+      </array>
+    </array>
+    <key>xyz.fontra.lineMetricsHorizontalLayout.zones</key>
+    <dict>
+      <key>ascender</key>
+      <integer>16</integer>
+      <key>baseline</key>
+      <integer>-16</integer>
+      <key>capHeight</key>
+      <integer>16</integer>
+      <key>descender</key>
+      <integer>-16</integer>
+      <key>xHeight</key>
+      <integer>16</integer>
+    </dict>
+  </dict>
+</plist>
