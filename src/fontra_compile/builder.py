@@ -848,7 +848,7 @@ class Builder:
 
             builder.setupGlyf(glyphs)
             gvarVariations = getGlyphInfoAttributes(self.glyphInfos, "gvarVariations")
-            if gvarVariations:
+            if gvarVariations and self.globalAxes:
                 if self.useExtendedGvar:
                     builder.setupGVAR(gvarVariations)
                 else:
@@ -919,6 +919,12 @@ class Builder:
 
                 colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
 
+            if pb.varstorebuilder is None:
+                from fontTools.varLib.varStore import OnlineVarStoreBuilder
+
+                pb.varstorebuilder = OnlineVarStoreBuilder(
+                    [axis.tag for axis in self.globalAxes]
+                )
             pb.build_colr(colorGlyphs)
             pb.build_palette()
         else:
