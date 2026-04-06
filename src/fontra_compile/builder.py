@@ -1,3 +1,4 @@
+import pathlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -540,8 +541,21 @@ class Builder:
         # Must detect COLRv1 BEFORE prepareGlyphs so the correct outline
         # format (ttGlyph vs charString) is chosen from the start.
         self._colorV1RawCache = await self.getRawColorV1Data()
-        if self._colorV1RawCache:
+        # .fontra sources always produce TTF — COLRv1 requires glyf outlines.
+        # CFF2 is incompatible with COLR/CPAL tables per the OpenType spec.
+        # Check backend path as a fallback for fonts where not every glyph
+        # has colorv1 customData (e.g. plain base glyphs with cubic curves).
+        backendPath = getattr(self.reader, "path", None) or getattr(
+            self.reader, "_path", None
+        )
+        isFontraSource = (
+            backendPath is not None
+            and pathlib.Path(backendPath).suffix.lower() == ".fontra"
+        )
+
+        if self._colorV1RawCache or isFontraSource:
             self.buildCFF2 = False
+
         await self.prepareGlyphs()
         return await self.buildFont()
 
@@ -814,6 +828,12 @@ class Builder:
         )
 
     async def buildFont(self) -> TTFont:
+        # COLRv1/v0 fonts require TrueType (glyf) outlines.
+        # CFF2 is incompatible with COLR/CPAL tables per the OpenType spec.
+        # Force TTF mode if any glyph carries COLRv1 data.
+        if any(g.hasColorV1 for g in self.glyphInfos.values()):
+            self.buildCFF2 = False
+
         builder = FontBuilder(
             await self.reader.getUnitsPerEm(),
             isTTF=not self.buildCFF2,
