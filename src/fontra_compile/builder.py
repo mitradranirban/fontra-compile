@@ -367,8 +367,8 @@ class GlyphInfo:
         else:
             assert self.charString is None
             assert self.charStringSupports is None
-            if self.gvarVariations is None:
-                self.gvarVariations = []
+        if self.gvarVariations is None:
+            self.gvarVariations = []
 
 
 @dataclass
@@ -448,6 +448,7 @@ class Builder:
             if self.requestedGlyphNames
             else sorted(self.glyphMap)  # XXX
         )
+
         if ".notdef" not in glyphOrder:
             glyphOrder.insert(0, ".notdef")
         self.glyphOrder = glyphOrder
@@ -457,6 +458,7 @@ class Builder:
         self.globalAxisDict = {
             axis.name: applyAxisMapToAxisValues(axis) for axis in self.globalAxes
         }
+
         self.globalAxisTags = {axis.name: axis.tag for axis in self.globalAxes}
         self.defaultLocation = {k: v[1] for k, v in self.globalAxisDict.items()}
 
@@ -481,6 +483,7 @@ class Builder:
         backendPath = getattr(self.reader, "path", None) or getattr(
             self.reader, "_path", None
         )
+
         if backendPath is None:
             return {}
         fontDataFile = pathlib.Path(backendPath) / "font-data.json"
@@ -537,7 +540,6 @@ class Builder:
         return colorV1Data  # { glyphName: { layerName: colorv1_dict } }
 
     async def build(self) -> TTFont:
-
         # Must detect COLRv1 BEFORE prepareGlyphs so the correct outline
         # format (ttGlyph vs charString) is chosen from the start.
         self._colorV1RawCache = await self.getRawColorV1Data()
@@ -548,6 +550,7 @@ class Builder:
         backendPath = getattr(self.reader, "path", None) or getattr(
             self.reader, "_path", None
         )
+
         isFontraSource = (
             backendPath is not None
             and pathlib.Path(backendPath).suffix.lower() == ".fontra"
@@ -583,16 +586,16 @@ class Builder:
 
             if codePoints is not None:
                 self.cmap.update((codePoint, glyphName) for codePoint in codePoints)
-                try:
-                    glyphInfo = await self.prepareOneGlyph(glyphName)
-                except KeyboardInterrupt:
-                    raise
-                except (
-                    InterpolationError,
-                    MissingBaseGlyphError,
-                    VariationModelError,
-                ) as e:
-                    print("warning", glyphName, repr(e))  # TODO: use logging
+            try:
+                glyphInfo = await self.prepareOneGlyph(glyphName)
+            except KeyboardInterrupt:
+                raise
+            except (
+                InterpolationError,
+                MissingBaseGlyphError,
+                VariationModelError,
+            ) as e:
+                print("warning", glyphName, repr(e))  # TODO: use logging
 
             if glyphInfo is None:
                 # make .notdef based on UPM
@@ -661,7 +664,7 @@ class Builder:
 
         componentInfo = await self.collectComponentInfo(glyph, defaultSourceIndex)
 
-        # Check raw JSON cache built during _detectColorV1
+        # Check raw JSON cache built during build()
         has_colorv1 = glyphName in getattr(self, "_colorV1RawCache", {})
 
         leftSideBearing = computeLeftSideBearing(defaultLayerGlyph.path, self.buildCFF2)
@@ -724,10 +727,12 @@ class Builder:
                         f"components not compatible in {glyph.name}: "
                         f"{compo.name} vs. {compoInfo.name}"
                     )
+
                 for attrName in VAR_TRANSFORM_MAPPING:
                     compoInfo.transform[attrName].append(
                         getattr(compo.transformation, attrName)
                     )
+
                 normLoc = normalizeLocation(compo.location, compoInfo.baseAxisDict)
                 for axisName, axisValue in normLoc.items():
                     if axisName in compoInfo.location:
@@ -757,11 +762,11 @@ class Builder:
                 values = compoInfo.transform[attrName]
                 if any(v != fieldInfo.defaultValue for v in values):
                     flags |= fieldInfo.flag
-                    firstValue = values[0]
-                    if any(v != firstValue for v in values[1:]):
-                        flags |= VarComponentFlags.TRANSFORM_HAS_VARIATION
-                        if attrName in VARCO_IF_VARYING:
-                            isVariableComponent = True
+                firstValue = values[0]
+                if any(v != firstValue for v in values[1:]):
+                    flags |= VarComponentFlags.TRANSFORM_HAS_VARIATION
+                if attrName in VARCO_IF_VARYING:
+                    isVariableComponent = True
 
             axesAtDefault = []
             for axisName, values in compoInfo.location.items():
@@ -807,6 +812,7 @@ class Builder:
         responsiveAxesNames = {
             axisName for source in baseGlyph.sources for axisName in source.location
         }
+
         respondsToGlobalAxes = bool(
             responsiveAxesNames - localAxisNames
         ) or await asyncAny(
@@ -820,6 +826,7 @@ class Builder:
             **self.globalAxisTags,
             **makeLocalAxisTags(baseAxisDict, self.globalAxisDict),
         }
+
         return dict(
             localAxisNames=localAxisNames,
             respondsToGlobalAxes=respondsToGlobalAxes,
@@ -873,80 +880,85 @@ class Builder:
                     builder.setupGVAR(gvarVariations)
                 else:
                     builder.setupGvar(gvarVariations)
-        if any(g.hasColorV1 for g in self.glyphInfos.values()):
-            print("COLRv1 detected; building paint tables...")
 
-            customData = await self.getCustomData() or {}
-            palettes = customData.get("com.github.googlei18n.ufo2ft.colorPalettes", [])
+            if any(g.hasColorV1 for g in self.glyphInfos.values()):
+                print("COLRv1 detected; building paint tables...")
 
-            pb = PythonBuilder(builder.font)
-            # Fontra stores palettes as [[r,g,b,a], ...] floats — convert to #RRGGBBAA
-            # and load into PythonBuilder so integer paletteIndex lookups work
-            if palettes:
-                # Fontra: palettes[paletteIdx][colorIdx] = [r, g, b, a]
-                # SetColors expects: colors[colorIdx][paletteIdx] = "#RRGGBBAA"
-                # so we must transpose: iterate color indices in the outer loop
-                numColors = len(palettes[0])
-                hexColors = [
-                    [
-                        "#{:02x}{:02x}{:02x}{:02x}".format(
-                            round(palettes[pi][ci][0] * 255),
-                            round(palettes[pi][ci][1] * 255),
-                            round(palettes[pi][ci][2] * 255),
-                            round(palettes[pi][ci][3] * 255),
-                        )
-                        for pi in range(len(palettes))
-                    ]
-                    for ci in range(numColors)
-                ]
-                pb.SetColors(hexColors)
-
-            # Read raw JSON directly — backend drops customData during deserialization
-            colorV1RawData = await self.getRawColorV1Data()
-            colorGlyphs = {}
-            for glyphName, layerPaints in colorV1RawData.items():
-                if glyphName not in self.glyphInfos:
-                    continue
-                glyphInfo = self.glyphInfos[glyphName]
-                sourceGlyph = await self.getSourceGlyph(glyphName)
-                if len(layerPaints) > 1 and glyphInfo.model is not None:
-                    activeSources = filterActiveSources(sourceGlyph.sources)
-                    userSpaceLocs = [
-                        {
-                            self.globalAxisTags.get(k, k): v
-                            for k, v in {
-                                **self.defaultLocation,
-                                **source.location,
-                            }.items()
-                        }
-                        for source in activeSources
-                    ]
-                    colorModel = VariationModel(userSpaceLocs)
-                    paintDict = merge_paint_sources(
-                        layerPaints,
-                        activeSources,
-                        colorModel,
-                        self.globalAxisTags,
-                        userSpaceLocs,
-                    )
-                else:
-                    defaultLayerName = filterActiveSources(sourceGlyph.sources)[
-                        0
-                    ].layerName
-                    paintDict = layerPaints.get(
-                        defaultLayerName, next(iter(layerPaints.values()))
-                    )
-
-                colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
-
-            if pb.varstorebuilder is None:
-                from fontTools.varLib.varStore import OnlineVarStoreBuilder
-
-                pb.varstorebuilder = OnlineVarStoreBuilder(
-                    [axis.tag for axis in self.globalAxes]
+                customData = await self.getCustomData() or {}
+                palettes = customData.get(
+                    "com.github.googlei18n.ufo2ft.colorPalettes", []
                 )
-            pb.build_colr(colorGlyphs)
-            pb.build_palette()
+
+                pb = PythonBuilder(builder.font)
+                # Fontra stores palettes as [[r,g,b,a], ...] floats — convert to
+                # #RRGGBBAA and load into PythonBuilder so integer paletteIndex works.
+                if palettes:
+                    # Fontra: palettes[paletteIdx][colorIdx] = [r, g, b, a]
+                    # SetColors expects: colors[colorIdx][paletteIdx] = "#RRGGBBAA"
+                    # so we must transpose: iterate color indices in the outer loop
+                    numColors = len(palettes[0])
+                    hexColors = [
+                        [
+                            "#{:02x}{:02x}{:02x}{:02x}".format(
+                                round(palettes[pi][ci][0] * 255),
+                                round(palettes[pi][ci][1] * 255),
+                                round(palettes[pi][ci][2] * 255),
+                                round(palettes[pi][ci][3] * 255),
+                            )
+                            for pi in range(len(palettes))
+                        ]
+                        for ci in range(numColors)
+                    ]
+                    pb.SetColors(hexColors)
+
+                # Read raw JSON directly — backend drops customData during deserialization
+                colorV1RawData = await self.getRawColorV1Data()
+                colorGlyphs = {}
+                for glyphName, layerPaints in colorV1RawData.items():
+                    if glyphName not in self.glyphInfos:
+                        continue
+                    glyphInfo = self.glyphInfos[glyphName]
+                    sourceGlyph = await self.getSourceGlyph(glyphName)
+                    if len(layerPaints) > 1 and glyphInfo.model is not None:
+                        activeSources = filterActiveSources(sourceGlyph.sources)
+                        userSpaceLocs = [
+                            {
+                                self.globalAxisTags.get(k, k): v
+                                for k, v in {
+                                    **self.defaultLocation,
+                                    **source.location,
+                                }.items()
+                            }
+                            for source in activeSources
+                        ]
+                        colorModel = VariationModel(userSpaceLocs)
+                        paintDict = merge_paint_sources(
+                            layerPaints,
+                            activeSources,
+                            colorModel,
+                            self.globalAxisTags,
+                            userSpaceLocs,
+                        )
+                    else:
+                        defaultLayerName = filterActiveSources(sourceGlyph.sources)[
+                            0
+                        ].layerName
+                        paintDict = layerPaints.get(
+                            defaultLayerName, next(iter(layerPaints.values()))
+                        )
+
+                    colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
+
+                if pb.varstorebuilder is None:
+                    from fontTools.varLib.varStore import OnlineVarStoreBuilder
+
+                    pb.varstorebuilder = OnlineVarStoreBuilder(
+                        [axis.tag for axis in self.globalAxes]
+                    )
+
+                pb.build_colr(colorGlyphs)
+                pb.build_palette()
+
         else:
             charStrings = getGlyphInfoAttributes(self.glyphInfos, "charString")
             charStringSupports = getGlyphInfoAttributes(
@@ -980,12 +992,14 @@ class Builder:
             descent=_cd.get("openTypeHheaDescender", descender),
             lineGap=_cd.get("openTypeHheaLineGap", 0),
         )
+
         builder.setupHorizontalMetrics(
             dictZip(
                 getGlyphInfoAttributes(self.glyphInfos, "xAdvance"),
                 getGlyphInfoAttributes(self.glyphInfos, "leftSideBearing"),
             )
         )
+
         builder.setupCharacterMap(self.cmap)
         builder.setupOS2(
             sTypoAscender=_cd.get("openTypeOS2TypoAscender", ascender),
@@ -1019,6 +1033,7 @@ class Builder:
             for glyphName in self.glyphOrder
             if self.glyphInfos[glyphName].variableComponents
         ]
+
         coverage = ot.Coverage()
         coverage.glyphs = glyphNames
 
@@ -1094,18 +1109,6 @@ class Builder:
         vhvar = VHVAR.table = tableClass()
         vhvar.Version = 0x00010000
 
-        # # Build list of source font advance widths for each glyph
-        # metricsTag = tableFields.metricsTag
-        # advMetricses = [m[metricsTag].metrics for m in master_ttfs]
-
-        # # Build list of source font vertical origin coords for each glyph
-        # if tableTag == "VVAR" and "VORG" in master_ttfs[0]:
-        #     vOrigMetricses = [m["VORG"].VOriginRecords for m in master_ttfs]
-        #     defaultYOrigs = [m["VORG"].defaultVertOriginY for m in master_ttfs]
-        #     vOrigMetricses = list(zip(vOrigMetricses, defaultYOrigs))
-        # else:
-        #     vOrigMetricses = None
-
         metricsStore, advanceMapping, vOrigMapping = self._prepareHVVAR(
             "xAdvanceVariations", axisTags
         )
@@ -1129,7 +1132,6 @@ class Builder:
         glyphOrder = self.glyphOrder
 
         vhAdvanceDeltasAndSupports = {}
-        # vOrigDeltasAndSupports = {}
 
         for glyphName in glyphOrder:
             glyphInfo = self.glyphInfos[glyphName]
@@ -1144,17 +1146,6 @@ class Builder:
 
         if doVOrigins:
             raise NotImplementedError()
-            # for glyph in glyphOrder:
-            #     # We need to supply a vOrigs tuple with non-None default values
-            #     # for each glyph. vOrigMetricses contains values only for those
-            #     # glyphs which have a non-default vOrig.
-            #     vOrigs = [
-            #         metrics[glyph] if glyph in metrics else defaultVOrig
-            #         for metrics, defaultVOrig in vOrigMetricses
-            #     ]
-            #     vOrigDeltasAndSupports[glyph] = masterModel.getDeltasAndSupports(
-            #         vOrigs, round=otRound
-            #     )
 
         storeBuilder = OnlineVarStoreBuilder(axisTags)
         advMapping = {}
@@ -1163,25 +1154,12 @@ class Builder:
             storeBuilder.setSupports(supports)
             advMapping[glyphName] = storeBuilder.storeDeltas(deltas, round=noRound)
 
-        # if vOrigMetricses:
-        #     vOrigMap = {}
-        #     for glyphName in glyphOrder:
-        #         deltas, supports = vOrigDeltasAndSupports[glyphName]
-        #         storeBuilder.setSupports(supports)
-        #         vOrigMap[glyphName] = storeBuilder.storeDeltas(deltas, round=noRound)
-
         varStore = storeBuilder.finish()
         mapping2 = varStore.optimize(use_NO_VARIATION_INDEX=False)
         advMapping = [mapping2[advMapping[g]] for g in glyphOrder]
         advanceMapping = buildVarIdxMap(advMapping, glyphOrder)
 
-        # if vOrigMetricses:
-        #     vOrigMap = [mapping2[vOrigMap[g]] for g in glyphOrder]
-
         vOrigMapping = None
-
-        # if vOrigMetricses:
-        #     vOrigMapping = buildVarIdxMap(vOrigMap, glyphOrder)
 
         return varStore, advanceMapping, vOrigMapping
 
@@ -1321,6 +1299,7 @@ def buildTTGlyph(glyph, glyphSources, defaultLayerGlyph, model):
     gvarVariations = (
         prepareGvarVariations(sourceCoordinates, model) if model is not None else []
     )
+
     return ttGlyph, gvarVariations
 
 
@@ -1444,11 +1423,11 @@ def axisTuple(axis, fixAsymmetricAxes=True) -> tuple[float, float, float]:
         # Variable component axis values can interpolate across the "default" border.
         # For example if an axis goes from 0 to 1000 with the default at 200, a variable
         # component may interpolate this from 100 to 600. In the VARC table, all axis
-        # values will be normalized to (-1, 0, +1). So 100 would normalize to -0.5 and 600
-        # would normalize to +0.5. But this means that interpolation does not work the
-        # same in the normalized space. For example, the midpoint between -0.5 and +0.5
-        # is 0, but the midpoint between 100 and 600 is 350, which would normalize to
-        # 0.1875. This is obviously a problem.
+        # values will be normalized to (-1, 0, +1). So 100 would normalize to -0.5 and
+        # 600 would normalize to +0.5. But this means that interpolation does not work
+        # the same in the normalized space. For example, the midpoint between -0.5 and
+        # +0.5 is 0, but the midpoint between 100 and 600 is 350, which would normalize
+        # to 0.1875. This is obviously a problem.
         # To work around it, we extend either side of the axis so the distance between
         # minValue and defaultValue becomes the same as the distance between defaultValue
         # and maxValue.
