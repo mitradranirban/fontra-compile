@@ -1209,8 +1209,7 @@ class Builder:
             if not isinstance(endAngle, dict):
                 endAngle = endAngle * 360.0
             return pb.PaintSweepGradient(
-                data["centerX"],
-                data["centerY"],
+                (data["centerX"], data["centerY"]),
                 startAngle,
                 endAngle,
                 _buildColorLine(data["colorLine"]),
