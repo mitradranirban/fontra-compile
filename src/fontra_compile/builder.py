@@ -37,6 +37,44 @@ from fontTools.varLib.multiVarStore import OnlineMultiVarStoreBuilder
 from fontTools.varLib.varStore import OnlineVarStoreBuilder
 from paintcompiler import ColorLine, PythonBuilder
 
+# ---------------------------------------------------------------------------
+# PaintSweepGradient angle conversion helpers
+# ---------------------------------------------------------------------------
+
+
+def _convertSweepAngles(paint):
+    """Recursively convert PaintSweepGradient angles from turns (Fontra) to
+    degrees (paintcompiler).  Called ONLY on the static single-source paint
+    dict, before passing to _dataToPaint.  The variable path does this
+    conversion inside _merge_node, before mergeScalar, so VarStore deltas
+    are stored in degrees.  _dataToPaint itself never does any conversion."""
+    if not isinstance(paint, dict):
+        return paint
+    ptype = paint.get("type")
+    if ptype == "PaintSweepGradient":
+        paint = {
+            **paint,
+            "startAngle": paint.get("startAngle", 0.0) * 360.0,
+            "endAngle": paint.get("endAngle", 0.0) * 360.0,
+        }
+    result = {}
+    for k, v in paint.items():
+        if isinstance(v, dict):
+            result[k] = _convertSweepAngles(v)
+        elif isinstance(v, list):
+            result[k] = [
+                _convertSweepAngles(item) if isinstance(item, dict) else item
+                for item in v
+            ]
+        else:
+            result[k] = v
+    return result
+
+
+# ---------------------------------------------------------------------------
+# COLRv1 variation merging
+# ---------------------------------------------------------------------------
+
 
 def merge_paint_sources(
     layerPaints: dict,  # { layerName: colorv1_dict }
@@ -45,10 +83,8 @@ def merge_paint_sources(
     globalAxisTags: dict,  # name→tag
     userSpaceLocs: list,  # user-space locations keyed by axis tag, one per source
 ) -> dict:
-    """
-    Given one colorv1 paint dict per source layer, return a single
-    merged paint dict where varying scalar fields become variation dicts.
-    """
+    """Given one colorv1 paint dict per source layer, return a single merged
+    paint dict where varying scalar fields become variation keyframe dicts."""
     orderedPaints = [
         layerPaints.get(sources[i].layerName) for i in model.reverseMapping
     ]
@@ -164,20 +200,23 @@ def _merge_node(nodes, default, model, sources, axisTags, userSpaceLocs):
         }
 
     elif ptype == "PaintSweepGradient":
+        # Convert turns→degrees HERE (before mergeScalar) so that VarStore
+        # deltas are computed in degrees — paintcompiler's "angle" units
+        # converter is floatToFixed(degrees / 180, 14) and expects degrees.
+        # _dataToPaint does NO conversion for this paint type.
         return {
             "type": ptype,
             "centerX": ms("centerX"),
             "centerY": ms("centerY"),
-            # Scale from turns (Fontra) to degrees (paintcompiler) during merge
             "startAngle": _merge_scalar(
-                [n.get("startAngle", 0.0) for n in nodes],
+                [n.get("startAngle", 0.0) * 360.0 for n in nodes],
                 model,
                 sources,
                 axisTags,
                 userSpaceLocs,
             ),
             "endAngle": _merge_scalar(
-                [n.get("endAngle", 0.0) for n in nodes],
+                [n.get("endAngle", 0.0) * 360.0 for n in nodes],
                 model,
                 sources,
                 axisTags,
@@ -307,7 +346,7 @@ def _buildColorLine(colorLineData):
     extend = colorLineData.get("extend", "pad")
     compiled_stops = [
         (
-            stop["stopOffset"],  # offset: plain number or variation dict
+            stop["stopOffset"],  # offset: plain number or variation keyframe dict
             (
                 stop["paletteIndex"],  # color: palette index int
                 stop.get("alpha", 1.0),  # alpha: packed with color as tuple
@@ -318,6 +357,11 @@ def _buildColorLine(colorLineData):
     return ColorLine(compiled_stops, extend=extend)
 
 
+# ---------------------------------------------------------------------------
+# Core dataclasses and exceptions
+# ---------------------------------------------------------------------------
+
+
 class InterpolationError(Exception):
     pass
 
@@ -326,9 +370,9 @@ class MissingBaseGlyphError(Exception):
     pass
 
 
-# If a component transformation has variations in any of the following fields, the
-# component can not be a classic component, and should be compiled as a variable
-# component, even if there are no axis variations
+# If a component transformation has variations in any of the following fields,
+# the component cannot be a classic component and should be compiled as a
+# variable component, even if there are no axis variations.
 VARCO_IF_VARYING = {
     "rotation",
     "scaleX",
@@ -339,9 +383,9 @@ VARCO_IF_VARYING = {
     "tCenterY",
 }
 
-# If a glyph layer has customData.colorv1, compile as COLRv1 (skip glyf/CFF, add COLR/CPAL)
+# If a glyph layer has customData.colorv1, compile as COLRv1
 COLORV1_CUSTOM_KEYS = {
-    "colorv1",  # Fontra key for paint graphs (PaintColrLayers, etc.)
+    "colorv1",
 }
 
 
@@ -388,7 +432,6 @@ class ComponentInfo:
         compo.transform = DecomposedTransform(
             **{k: v[self.defaultSourceIndex] for k, v in self.transform.items()}
         )
-
         if not self.flags & VarComponentFlags.TRANSFORM_HAS_VARIATION:
             return
 
@@ -403,7 +446,6 @@ class ComponentInfo:
             for fieldName, fieldMappingValues in VAR_TRANSFORM_MAPPING.items()
             if fieldMappingValues.flag & self.flags
         ]
-
         masterValues = [Vector(vec) for vec in zip(*transformValues)]
         assert masterValues
 
@@ -458,7 +500,6 @@ class Builder:
         self.globalAxisDict = {
             axis.name: applyAxisMapToAxisValues(axis) for axis in self.globalAxes
         }
-
         self.globalAxisTags = {axis.name: axis.tag for axis in self.globalAxes}
         self.defaultLocation = {k: v[1] for k, v in self.globalAxisDict.items()}
 
@@ -475,15 +516,13 @@ class Builder:
         return bool(rawGlyphMap)
 
     async def getCustomData(self) -> dict:
-        """Read customData from font-data.json directly, bypassing the FontraBackend
-        which strips all customData during deserialization."""
+        """Read customData from font-data.json directly, bypassing the
+        FontraBackend which strips all customData during deserialization."""
         import json
-        import pathlib
 
         backendPath = getattr(self.reader, "path", None) or getattr(
             self.reader, "_path", None
         )
-
         if backendPath is None:
             return {}
         fontDataFile = pathlib.Path(backendPath) / "font-data.json"
@@ -498,9 +537,10 @@ class Builder:
     async def getFontData(self) -> dict:
         """Read full font-data.json, bypassing the Fontra backend."""
         import json
-        import pathlib
 
-        backendPath = getattr(self.reader, "path", None)
+        backendPath = getattr(self.reader, "path", None) or getattr(
+            self.reader, "_path", None
+        )
         if backendPath is None:
             return {}
         fontDataFile = pathlib.Path(backendPath) / "font-data.json"
@@ -513,10 +553,11 @@ class Builder:
 
     async def getRawColorV1Data(self) -> dict:
         import json
-        import pathlib
 
         colorV1Data = {}
-        backendPath = getattr(self.reader, "path", None)
+        backendPath = getattr(self.reader, "path", None) or getattr(
+            self.reader, "_path", None
+        )
         if backendPath is None:
             return colorV1Data
         glyphsDir = pathlib.Path(backendPath) / "glyphs"
@@ -550,12 +591,10 @@ class Builder:
         backendPath = getattr(self.reader, "path", None) or getattr(
             self.reader, "_path", None
         )
-
         isFontraSource = (
             backendPath is not None
             and pathlib.Path(backendPath).suffix.lower() == ".fontra"
         )
-
         if self._colorV1RawCache or isFontraSource:
             self.buildCFF2 = False
 
@@ -586,16 +625,16 @@ class Builder:
 
             if codePoints is not None:
                 self.cmap.update((codePoint, glyphName) for codePoint in codePoints)
-            try:
-                glyphInfo = await self.prepareOneGlyph(glyphName)
-            except KeyboardInterrupt:
-                raise
-            except (
-                InterpolationError,
-                MissingBaseGlyphError,
-                VariationModelError,
-            ) as e:
-                print("warning", glyphName, repr(e))  # TODO: use logging
+                try:
+                    glyphInfo = await self.prepareOneGlyph(glyphName)
+                except KeyboardInterrupt:
+                    raise
+                except (
+                    InterpolationError,
+                    MissingBaseGlyphError,
+                    VariationModelError,
+                ) as e:
+                    print("warning", glyphName, repr(e))  # TODO: use logging
 
             if glyphInfo is None:
                 # make .notdef based on UPM
@@ -610,7 +649,7 @@ class Builder:
                     ),
                     hasContours=False,
                     xAdvance=500,
-                    leftSideBearing=0,  # TODO: fix when actual notdef shape is added
+                    leftSideBearing=0,
                     xAdvanceVariations=[500],
                     gvarVariations=None,
                 )
@@ -692,8 +731,6 @@ class Builder:
 
         firstSourceGlyph = sourceGlyphs[0]
 
-        # Collect all used axis names across all sources, per component --
-        # we will use that below to make component locations compatible
         allComponentAxisNames = [
             {axisName for compo in compoSources for axisName in compo.location}
             for compoSources in zip(
@@ -720,19 +757,16 @@ class Builder:
                     f"components not compatible {glyph.name}: "
                     f"{len(sourceGlyph.components)} vs. {len(components)}"
                 )
-
             for compoInfo, compo in zip(components, sourceGlyph.components):
                 if compo.name != compoInfo.name:
                     raise InterpolationError(
                         f"components not compatible in {glyph.name}: "
                         f"{compo.name} vs. {compoInfo.name}"
                     )
-
                 for attrName in VAR_TRANSFORM_MAPPING:
                     compoInfo.transform[attrName].append(
                         getattr(compo.transformation, attrName)
                     )
-
                 normLoc = normalizeLocation(compo.location, compoInfo.baseAxisDict)
                 for axisName, axisValue in normLoc.items():
                     if axisName in compoInfo.location:
@@ -741,7 +775,6 @@ class Builder:
         numSources = len(glyphSources)
 
         for compoInfo in components:
-            # Filter out unknown/unused axes
             compoInfo.location = {
                 axisName: values
                 for axisName, values in compoInfo.location.items()
@@ -765,8 +798,8 @@ class Builder:
                 firstValue = values[0]
                 if any(v != firstValue for v in values[1:]):
                     flags |= VarComponentFlags.TRANSFORM_HAS_VARIATION
-                if attrName in VARCO_IF_VARYING:
-                    isVariableComponent = True
+                    if attrName in VARCO_IF_VARYING:
+                        isVariableComponent = True
 
             axesAtDefault = []
             for axisName, values in compoInfo.location.items():
@@ -807,12 +840,9 @@ class Builder:
 
         localAxisNames = {axis.name for axis in baseGlyph.axes}
 
-        # To determine the `respondsToGlobalAxes` flag, we take this component and all
-        # its child components into account, recursively
         responsiveAxesNames = {
             axisName for source in baseGlyph.sources for axisName in source.location
         }
-
         respondsToGlobalAxes = bool(
             responsiveAxesNames - localAxisNames
         ) or await asyncAny(
@@ -890,8 +920,9 @@ class Builder:
                 )
 
                 pb = PythonBuilder(builder.font)
-                # Fontra stores palettes as [[r,g,b,a], ...] floats — convert to
-                # #RRGGBBAA and load into PythonBuilder so integer paletteIndex works.
+                # Fontra stores palettes as [[r,g,b,a], ...] floats — convert
+                # to #RRGGBBAA and load into PythonBuilder so integer
+                # paletteIndex works.
                 if palettes:
                     # Fontra: palettes[paletteIdx][colorIdx] = [r, g, b, a]
                     # SetColors expects: colors[colorIdx][paletteIdx] = "#RRGGBBAA"
@@ -911,7 +942,8 @@ class Builder:
                     ]
                     pb.SetColors(hexColors)
 
-                # Read raw JSON directly — backend drops customData during deserialization
+                # Read raw JSON directly — backend drops customData on
+                # deserialization.
                 colorV1RawData = await self.getRawColorV1Data()
                 colorGlyphs = {}
                 for glyphName, layerPaints in colorV1RawData.items():
@@ -919,7 +951,12 @@ class Builder:
                         continue
                     glyphInfo = self.glyphInfos[glyphName]
                     sourceGlyph = await self.getSourceGlyph(glyphName)
+
                     if len(layerPaints) > 1 and glyphInfo.model is not None:
+                        # Variable path: merge sources, converting
+                        # SweepGradient angles turns→degrees inside
+                        # _merge_node before mergeScalar, so VarStore
+                        # deltas are stored in degrees.
                         activeSources = filterActiveSources(sourceGlyph.sources)
                         userSpaceLocs = [
                             {
@@ -939,19 +976,24 @@ class Builder:
                             self.globalAxisTags,
                             userSpaceLocs,
                         )
+                        # _dataToPaint receives angles already in degrees
+                        # (as plain floats or variation keyframe dicts).
+                        # No further conversion needed.
+                        colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
                     else:
+                        # Static / single-source path: mergeNode is never
+                        # called, so convert turns→degrees here before
+                        # handing off to _dataToPaint.
                         defaultLayerName = filterActiveSources(sourceGlyph.sources)[
                             0
                         ].layerName
                         paintDict = layerPaints.get(
                             defaultLayerName, next(iter(layerPaints.values()))
                         )
-
-                    colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
+                        paintDict = _convertSweepAngles(paintDict)
+                        colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
 
                 if pb.varstorebuilder is None:
-                    from fontTools.varLib.varStore import OnlineVarStoreBuilder
-
                     pb.varstorebuilder = OnlineVarStoreBuilder(
                         [axis.tag for axis in self.globalAxes]
                     )
@@ -964,6 +1006,7 @@ class Builder:
             charStringSupports = getGlyphInfoAttributes(
                 self.glyphInfos, "charStringSupports"
             )
+
             varDataList, regionList = prepareCFFVarData(charStrings, charStringSupports)
             builder.setupCFF2(charStrings)
             addCFFVarStore(builder.font, None, varDataList, regionList)
@@ -1071,8 +1114,9 @@ class Builder:
                 components.append(compo)
 
             if self.glyphInfos[glyphName].hasContours:
-                # Add a component for the outline section, so we can effectively
-                # mix outlines and components. This is a special case in the spec.
+                # Add a component for the outline section, so we can
+                # effectively mix outlines and components.  This is a
+                # special case in the spec.
                 compo = ot.VarComponent()
                 compo.glyphName = glyphName
                 components.append(compo)
@@ -1119,9 +1163,6 @@ class Builder:
         else:
             setattr(vhvar, tableFields.advMapping, advanceMapping)
 
-        # if vOrigMapping is not None:
-        #     setattr(vhvar, tableFields.vOrigMapping, vOrigMapping)
-
         setattr(vhvar, tableFields.sb1, None)
         setattr(vhvar, tableFields.sb2, None)
 
@@ -1164,7 +1205,16 @@ class Builder:
         return varStore, advanceMapping, vOrigMapping
 
     def _dataToPaint(self, data, pb):
-        """Convert Fontra colorv1 dict → paintcompiler paint objects."""
+        """Convert Fontra colorv1 dict → paintcompiler paint objects.
+
+        IMPORTANT — angle convention:
+        PaintSweepGradient startAngle/endAngle arrive here ALREADY in degrees,
+        regardless of the code path:
+          • Variable path  : _merge_node multiplied by 360 before mergeScalar.
+          • Static path    : _convertSweepAngles() multiplied by 360 before
+                             this method is called in buildFont().
+        This method does NO unit conversion for angles.
+        """
         ptype = data.get("type")
 
         if ptype == "PaintColrLayers":
@@ -1198,24 +1248,16 @@ class Builder:
                 _buildColorLine(data["colorLine"]),
             )
 
-        # dataToPaint — convert unconditionally, handles both float and dict
         elif ptype == "PaintSweepGradient":
-            startAngle = data.get("startAngle", 0.0)
-            endAngle = data.get("endAngle", 0.0)
-            if isinstance(startAngle, dict):
-                startAngle = {k: v * 360.0 for k, v in startAngle.items()}
-            else:
-                startAngle = startAngle * 360.0
-            if isinstance(endAngle, dict):
-                endAngle = {k: v * 360.0 for k, v in endAngle.items()}
-            else:
-                endAngle = endAngle * 360.0
+            # Angles are already in degrees — no conversion here.
+            # See docstring above for the invariant.
             return pb.PaintSweepGradient(
                 (data["centerX"], data["centerY"]),
-                startAngle,
-                endAngle,
+                data.get("startAngle", 0.0),
+                data.get("endAngle", 0.0),
                 _buildColorLine(data["colorLine"]),
             )
+
         elif ptype == "PaintTranslate":
             return pb.PaintTranslate(
                 data.get("dx", 0),
@@ -1268,6 +1310,11 @@ class Builder:
         raise ValueError(f"Unsupported paint type: {ptype}")
 
 
+# ---------------------------------------------------------------------------
+# Standalone helper functions
+# ---------------------------------------------------------------------------
+
+
 def prepareLocations(glyphSources, defaultLocation, axisDict):
     return [
         normalizeLocation({**defaultLocation, **source.location}, axisDict)
@@ -1286,7 +1333,8 @@ def checkInterpolationCompatibility(glyph: VariableGlyph, glyphSources):
         else:
             if firstSourcePath.contourInfo != sourceGlyph.path.contourInfo:
                 raise InterpolationError(
-                    f"contours for source {source.name} of {glyph.name} are not compatible"
+                    f"contours for source {source.name} of {glyph.name} "
+                    f"are not compatible"
                 )
 
 
@@ -1322,7 +1370,7 @@ def prepareSourceCoordinates(glyph: VariableGlyph, glyphSources):
         coordinates = GlyphCoordinates()
 
         assert isinstance(sourceGlyph.path, PackedPath)
-        coordinates.array.extend(sourceGlyph.path.coordinates)  # shortcut via ._a array
+        coordinates.array.extend(sourceGlyph.path.coordinates)
 
         # phantom points
         coordinates.append((0, 0))
@@ -1359,8 +1407,8 @@ def buildCharString(glyph, glyphSources, defaultLayerGlyph, model):
         charStringSupports = None
     else:
         if model.reverseMapping[0] != 0:
-            # For some reason, CFF2CharStringMergePen requires the first source
-            # to be the default, so let's make it so.
+            # CFF2CharStringMergePen requires the first source to be the
+            # default, so reorder.
             glyphSources = [glyphSources[i] for i in model.reverseMapping]
             model = VariationModel(model.locations, model.axisOrder)
             assert model.reverseMapping[0] == 0
@@ -1428,21 +1476,11 @@ def applyAxisMapToAxisValues(axis) -> tuple[float, float, float]:
 
 
 def axisTuple(axis, fixAsymmetricAxes=True) -> tuple[float, float, float]:
-    minValue, defaultValue, maxValue = axis.minValue, axis.defaultValue, axis.maxValue
+    minValue, defaultValue, maxValue = (axis.minValue, axis.defaultValue, axis.maxValue)
     if fixAsymmetricAxes and minValue < defaultValue < maxValue:
-        # Variable component axis values can interpolate across the "default" border.
-        # For example if an axis goes from 0 to 1000 with the default at 200, a variable
-        # component may interpolate this from 100 to 600. In the VARC table, all axis
-        # values will be normalized to (-1, 0, +1). So 100 would normalize to -0.5 and
-        # 600 would normalize to +0.5. But this means that interpolation does not work
-        # the same in the normalized space. For example, the midpoint between -0.5 and
-        # +0.5 is 0, but the midpoint between 100 and 600 is 350, which would normalize
-        # to 0.1875. This is obviously a problem.
-        # To work around it, we extend either side of the axis so the distance between
-        # minValue and defaultValue becomes the same as the distance between defaultValue
-        # and maxValue.
-        # The downside of this approach is that axis values will no longer be clipped to
-        # their original minimum or maximum, so we may create new edge cases here.
+        # Variable component axis values can interpolate across the "default"
+        # border.  To make normalization symmetric, extend either side so the
+        # distance between minValue and defaultValue matches the other side.
         minDiff = defaultValue - minValue
         maxDiff = maxValue - defaultValue
         if minDiff > maxDiff:
@@ -1498,8 +1536,6 @@ def filterDuplicates(seq):
 def makeLocalAxisTags(axisDict, globalAxes):
     axisTags = {}
     for name in axisDict:
-        # Sort axis names, to match current Fontra and RoboCJK behavior.
-        # TODO: This should be changed to something more controllable.
         if name in globalAxes:
             continue
         numNames = len(axisTags)
@@ -1544,9 +1580,6 @@ def getGlyphInfoAttributes(glyphInfos, attrName):
 def drawPathToSegmentPen(path, pen):
     # We ask PointToSegmentPen to output implied closing lines, then filter
     # said closing lines again because we don't need them in the CharString.
-    # The reason is that PointToSegment pen will still output closing lines
-    # in some cases, based on input coordinates, even if we ask it not to.
-    # https://github.com/fonttools/fonttools/issues/3584
     recPen = DropImpliedClosingLinePen()
     pointPen = PointToSegmentPen(recPen, outputImpliedClosingLine=True)
     path.drawPoints(pointPen)
