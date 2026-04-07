@@ -183,7 +183,6 @@ def _merge_node(nodes, default, model, sources, axisTags, userSpaceLocs):
                 axisTags,
                 userSpaceLocs,
             ),
-            "_anglesInDegrees": True,
             "colorLine": _merge_colorline(
                 [n["colorLine"] for n in nodes], model, sources, axisTags, userSpaceLocs
             ),
@@ -1200,11 +1199,20 @@ class Builder:
             )
 
         elif ptype == "PaintSweepGradient":
-            scale = 1.0 if data.get("_anglesInDegrees") else 360.0
+            startAngle = data.get("startAngle", 0.0)
+            endAngle = data.get("endAngle", 0.0)
+            # If values are dicts, they came through mergeNode and are already
+            # in degrees (×360 applied per source before mergeScalar).
+            # If plain floats, they are raw turns from the static path — convert now.
+            if not isinstance(startAngle, dict):
+                startAngle = startAngle * 360.0
+            if not isinstance(endAngle, dict):
+                endAngle = endAngle * 360.0
             return pb.PaintSweepGradient(
-                (data["centerX"], data["centerY"]),
-                data.get("startAngle", 0.0) * scale,
-                data.get("endAngle", 0.0) * scale,
+                data["centerX"],
+                data["centerY"],
+                startAngle,
+                endAngle,
                 _buildColorLine(data["colorLine"]),
             )
         elif ptype == "PaintTranslate":
