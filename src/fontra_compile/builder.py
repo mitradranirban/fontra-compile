@@ -911,6 +911,20 @@ class Builder:
                     ]
                     pb.SetColors(hexColors)
 
+                    cpalPalettes = [
+                        [
+                            (
+                                round(palettes[pi][ci][0] * 255),
+                                round(palettes[pi][ci][1] * 255),
+                                round(palettes[pi][ci][2] * 255),
+                                round(palettes[pi][ci][3] * 255),
+                            )
+                            for ci in range(numColors)
+                        ]
+                        for pi in range(len(palettes))
+                    ]
+                    builder.setupCPAL(cpalPalettes)
+
                 # Read raw JSON directly — backend drops customData during deserialization
                 colorV1RawData = await self.getRawColorV1Data()
                 colorGlyphs = {}
@@ -1201,11 +1215,10 @@ class Builder:
         elif ptype == "PaintSweepGradient":
             return pb.PaintSweepGradient(
                 (data["centerX"], data["centerY"]),
-                data["startAngle"],
-                data["endAngle"],
+                data.get("startAngle", 0.0) * 360.0,
+                data.get("endAngle", 0.0) * 360.0,
                 _buildColorLine(data["colorLine"]),
             )
-
         elif ptype == "PaintTranslate":
             return pb.PaintTranslate(
                 data.get("dx", 0),
