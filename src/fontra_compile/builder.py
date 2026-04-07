@@ -170,19 +170,20 @@ def _merge_node(nodes, default, model, sources, axisTags, userSpaceLocs):
             "centerY": ms("centerY"),
             # Scale from turns (Fontra) to degrees (paintcompiler) during merge
             "startAngle": _merge_scalar(
-                [n.get("startAngle", 0.0) for n in nodes],
+                [n.get("startAngle", 0.0) * 360 for n in nodes],
                 model,
                 sources,
                 axisTags,
                 userSpaceLocs,
             ),
             "endAngle": _merge_scalar(
-                [n.get("endAngle", 0.0) for n in nodes],
+                [n.get("endAngle", 0.0) * 360 for n in nodes],
                 model,
                 sources,
                 axisTags,
                 userSpaceLocs,
             ),
+            "_anglesInDegrees": True,
             "colorLine": _merge_colorline(
                 [n["colorLine"] for n in nodes], model, sources, axisTags, userSpaceLocs
             ),
@@ -1199,10 +1200,11 @@ class Builder:
             )
 
         elif ptype == "PaintSweepGradient":
+            scale = 1.0 if data.get("_anglesInDegrees") else 360.0
             return pb.PaintSweepGradient(
                 (data["centerX"], data["centerY"]),
-                data.get("startAngle", 0.0) * 360.0,
-                data.get("endAngle", 0.0) * 360.0,
+                data.get("startAngle", 0.0) * scale,
+                data.get("endAngle", 0.0) * scale,
                 _buildColorLine(data["colorLine"]),
             )
         elif ptype == "PaintTranslate":
