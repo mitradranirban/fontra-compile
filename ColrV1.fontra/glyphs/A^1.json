@@ -1,0 +1,111 @@
+{
+"name": "A",
+"sources": [
+{
+"name": "",
+"layerName": "202ed5cd",
+"locationBase": "202ed5cd"
+}
+],
+"layers": {
+"202ed5cd": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 16,
+"y": 799
+},
+{
+"x": 16,
+"y": -2
+},
+{
+"x": 292,
+"y": -2
+},
+{
+"x": 292,
+"y": 125
+},
+{
+"x": 707,
+"y": 125
+},
+{
+"x": 707,
+"y": -4
+},
+{
+"x": 983,
+"y": -4
+},
+{
+"x": 983,
+"y": 797
+},
+{
+"x": 979,
+"y": 797
+},
+{
+"x": 979,
+"y": 801
+},
+{
+"x": 25,
+"y": 801
+},
+{
+"x": 25,
+"y": 799
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 707,
+"y": 400
+},
+{
+"x": 292,
+"y": 400
+},
+{
+"x": 292,
+"y": 526
+},
+{
+"x": 707,
+"y": 526
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 1000,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "A",
+"paint": {
+"alpha": 1,
+"paletteIndex": 2,
+"type": "PaintSolid"
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+}
+}
+}

@@ -1,0 +1,128 @@
+{
+"name": "D",
+"sources": [
+{
+"name": "",
+"layerName": "202ed5cd",
+"locationBase": "202ed5cd"
+}
+],
+"layers": {
+"202ed5cd": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 17,
+"y": 799
+},
+{
+"x": 17,
+"y": -2
+},
+{
+"x": 281,
+"y": -2
+},
+{
+"x": 281,
+"y": -4
+},
+{
+"x": 977,
+"y": 87
+},
+{
+"x": 977,
+"y": 202
+},
+{
+"x": 980,
+"y": 451
+},
+{
+"x": 982,
+"y": 451
+},
+{
+"x": 982,
+"y": 726
+},
+{
+"x": 293,
+"y": 796
+},
+{
+"x": 293,
+"y": 799
+}
+],
+"isClosed": true
+},
+{
+"points": [
+{
+"x": 293,
+"y": 273
+},
+{
+"x": 293,
+"y": 521
+},
+{
+"x": 704,
+"y": 479
+},
+{
+"x": 702,
+"y": 326
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 1000,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "D",
+"paint": {
+"centerX": 267,
+"centerY": 367,
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 1,
+"paletteIndex": 1,
+"stopOffset": 0.5
+},
+{
+"alpha": 1,
+"paletteIndex": 2,
+"stopOffset": 0.99
+}
+]
+},
+"endAngle": 0.23156072548690104,
+"startAngle": -0.1521200795745385,
+"type": "PaintSweepGradient"
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+}
+}
+}

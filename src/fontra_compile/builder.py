@@ -911,20 +911,6 @@ class Builder:
                     ]
                     pb.SetColors(hexColors)
 
-                    cpalPalettes = [
-                        [
-                            (
-                                round(palettes[pi][ci][0] * 255),
-                                round(palettes[pi][ci][1] * 255),
-                                round(palettes[pi][ci][2] * 255),
-                                round(palettes[pi][ci][3] * 255),
-                            )
-                            for ci in range(numColors)
-                        ]
-                        for pi in range(len(palettes))
-                    ]
-                    builder.setupCPAL(cpalPalettes)
-
                 # Read raw JSON directly — backend drops customData during deserialization
                 colorV1RawData = await self.getRawColorV1Data()
                 colorGlyphs = {}

@@ -1,0 +1,108 @@
+{
+"name": "C",
+"sources": [
+{
+"name": "",
+"layerName": "202ed5cd",
+"locationBase": "202ed5cd"
+}
+],
+"layers": {
+"202ed5cd": {
+"glyph": {
+"path": {
+"contours": [
+{
+"points": [
+{
+"x": 16,
+"y": 799
+},
+{
+"x": 16,
+"y": -2
+},
+{
+"x": 292,
+"y": -2
+},
+{
+"x": 292,
+"y": -1
+},
+{
+"x": 983,
+"y": -1
+},
+{
+"x": 983,
+"y": 274
+},
+{
+"x": 292,
+"y": 274
+},
+{
+"x": 292,
+"y": 526
+},
+{
+"x": 979,
+"y": 526
+},
+{
+"x": 979,
+"y": 801
+},
+{
+"x": 25,
+"y": 801
+},
+{
+"x": 25,
+"y": 799
+}
+],
+"isClosed": true
+}
+]
+},
+"xAdvance": 1000,
+"customData": {
+"colorv1": {
+"layers": [
+{
+"glyph": "C",
+"paint": {
+"colorLine": {
+"colorStops": [
+{
+"alpha": 1,
+"paletteIndex": 0,
+"stopOffset": 0
+},
+{
+"alpha": 1,
+"paletteIndex": 1,
+"stopOffset": 1
+}
+]
+},
+"r0": 0,
+"r1": 250,
+"type": "PaintRadialGradient",
+"x0": 35,
+"x1": 261,
+"y0": 400,
+"y1": 410
+},
+"type": "PaintGlyph"
+}
+],
+"type": "PaintColrLayers"
+}
+}
+}
+}
+}
+}
