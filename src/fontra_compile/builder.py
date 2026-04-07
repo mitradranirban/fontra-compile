@@ -170,14 +170,14 @@ def _merge_node(nodes, default, model, sources, axisTags, userSpaceLocs):
             "centerY": ms("centerY"),
             # Scale from turns (Fontra) to degrees (paintcompiler) during merge
             "startAngle": _merge_scalar(
-                [n.get("startAngle", 0.0) * 360 for n in nodes],
+                [n.get("startAngle", 0.0) for n in nodes],
                 model,
                 sources,
                 axisTags,
                 userSpaceLocs,
             ),
             "endAngle": _merge_scalar(
-                [n.get("endAngle", 0.0) * 360 for n in nodes],
+                [n.get("endAngle", 0.0) for n in nodes],
                 model,
                 sources,
                 axisTags,
@@ -1198,15 +1198,17 @@ class Builder:
                 _buildColorLine(data["colorLine"]),
             )
 
+        # dataToPaint — convert unconditionally, handles both float and dict
         elif ptype == "PaintSweepGradient":
             startAngle = data.get("startAngle", 0.0)
             endAngle = data.get("endAngle", 0.0)
-            # If values are dicts, they came through mergeNode and are already
-            # in degrees (×360 applied per source before mergeScalar).
-            # If plain floats, they are raw turns from the static path — convert now.
-            if not isinstance(startAngle, dict):
+            if isinstance(startAngle, dict):
+                startAngle = {k: v * 360.0 for k, v in startAngle.items()}
+            else:
                 startAngle = startAngle * 360.0
-            if not isinstance(endAngle, dict):
+            if isinstance(endAngle, dict):
+                endAngle = {k: v * 360.0 for k, v in endAngle.items()}
+            else:
                 endAngle = endAngle * 360.0
             return pb.PaintSweepGradient(
                 (data["centerX"], data["centerY"]),
