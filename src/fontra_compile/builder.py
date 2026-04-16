@@ -357,6 +357,26 @@ def _buildColorLine(colorLineData):
     return ColorLine(compiled_stops, extend=extend)
 
 
+# Cpal Palette Name helper
+
+
+def _normalizePaletteLabels(rawLabels, paletteCount):
+    rawLabels = rawLabels or []
+    labels = []
+    for i in range(paletteCount):
+        value = rawLabels[i] if i < len(rawLabels) else None
+        if isinstance(value, str):
+            value = value.strip() or None
+        else:
+            value = None
+        labels.append(value)
+    return labels
+
+
+def _palettesHaveLabels(labels):
+    return any(label is not None for label in labels)
+
+
 # ---------------------------------------------------------------------------
 # Core dataclasses and exceptions
 # ---------------------------------------------------------------------------
@@ -387,6 +407,8 @@ VARCO_IF_VARYING = {
 COLORV1_CUSTOM_KEYS = {
     "colorv1",
 }
+COLOR_PALETTES_KEY = "com.github.googlei18n.ufo2ft.colorPalettes"
+COLOR_PALETTE_LABELS_KEY = "org.colrpak.colorPaletteLabels"
 
 
 @dataclass
@@ -915,8 +937,10 @@ class Builder:
                 print("COLRv1 detected; building paint tables...")
 
                 customData = await self.getCustomData() or {}
-                palettes = customData.get(
-                    "com.github.googlei18n.ufo2ft.colorPalettes", []
+                palettes = customData.get(COLOR_PALETTES_KEY, [])
+                paletteLabels = _normalizePaletteLabels(
+                    customData.get(COLOR_PALETTE_LABELS_KEY),
+                    len(palettes),
                 )
 
                 pb = PythonBuilder(builder.font)
@@ -1000,6 +1024,15 @@ class Builder:
 
                 pb.build_colr(colorGlyphs)
                 pb.build_palette()
+
+                if palettes and _palettesHaveLabels(paletteLabels):
+                    from fontTools.colorLib.builder import buildCPAL
+
+                    builder.font["CPAL"] = buildCPAL(
+                        palettes,
+                        paletteLabels=paletteLabels,
+                        nameTable=builder.font["name"],
+                    )
 
         else:
             charStrings = getGlyphInfoAttributes(self.glyphInfos, "charString")
