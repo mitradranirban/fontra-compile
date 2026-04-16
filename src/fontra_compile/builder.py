@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import cffsubr
+from fontTools.colorLib.builder import buildCPAL
 from fontra.core.classes import VariableGlyph
 from fontra.core.path import PackedPath, Path
 from fontra.core.protocols import ReadableFontBackend
@@ -37,6 +38,8 @@ from fontTools.varLib.multiVarStore import OnlineMultiVarStoreBuilder
 from fontTools.varLib.varStore import OnlineVarStoreBuilder
 from paintcompiler import ColorLine, PythonBuilder
 
+COLOR_PALETTES_KEY = "com.github.googlei18n.ufo2ft.colorPalettes"
+COLOR_PALETTE_LABELS_KEY = "org.colrpak.colorPaletteLabels"
 # ---------------------------------------------------------------------------
 # PaintSweepGradient angle conversion helpers
 # ---------------------------------------------------------------------------
@@ -69,7 +72,25 @@ def _convertSweepAngles(paint):
         else:
             result[k] = v
     return result
+# ---------------------------------------------------------------------------
+# CPAL palette label helpers
+# ---------------------------------------------------------------------------
 
+def _normalizePaletteLabels(rawLabels, paletteCount):
+    """Return a list of length paletteCount with str or None per entry."""
+    rawLabels = rawLabels or []
+    labels = []
+    for i in range(paletteCount):
+        value = rawLabels[i] if i < len(rawLabels) else None
+        if isinstance(value, str):
+            value = value.strip() or None
+        else:
+            value = None
+        labels.append(value)
+    return labels
+
+def _palettesHaveLabels(labels):
+    return any(label is not None for label in labels)
 
 # ---------------------------------------------------------------------------
 # COLRv1 variation merging
@@ -407,8 +428,6 @@ VARCO_IF_VARYING = {
 COLORV1_CUSTOM_KEYS = {
     "colorv1",
 }
-COLOR_PALETTES_KEY = "com.github.googlei18n.ufo2ft.colorPalettes"
-COLOR_PALETTE_LABELS_KEY = "org.colrpak.colorPaletteLabels"
 
 
 @dataclass
@@ -966,7 +985,10 @@ class Builder:
                     ]
                     pb.SetColors(hexColors)
 
-                # Read raw JSON directly — backend drops customData on
+                pb.varstorebuilder = OnlineVarStoreBuilder(
+                    [axis.tag for axis in self.globalAxes]
+                )
+                                # Read raw JSON directly — backend drops customData on
                 # deserialization.
                 colorV1RawData = await self.getRawColorV1Data()
                 colorGlyphs = {}
@@ -985,21 +1007,21 @@ class Builder:
                         userSpaceLocs = [
                             {
                                 self.globalAxisTags.get(k, k): v
-                                for k, v in {
-                                    **self.defaultLocation,
-                                    **source.location,
-                                }.items()
+                                for k, v in source.location.items()
+                                if self.globalAxisTags.get(k, k)  # skip axes not in globalAxisTags
                             }
                             for source in activeSources
                         ]
-                        colorModel = VariationModel(userSpaceLocs)
+                        # Fill in the default value for any axis missing from sparse locations
+                        for loc in userSpaceLocs:
+                            for axisName, axisTag in self.globalAxisTags.items():
+                                if axisTag not in loc:
+                                    loc[axisTag] = self.defaultLocation[axisName]
+
+                        colorModel = glyphInfo.model
                         paintDict = merge_paint_sources(
-                            layerPaints,
-                            activeSources,
-                            colorModel,
-                            self.globalAxisTags,
-                            userSpaceLocs,
-                        )
+                            layerPaints, activeSources, colorModel, self.globalAxisTags, userSpaceLocs,
+)
                         # _dataToPaint receives angles already in degrees
                         # (as plain floats or variation keyframe dicts).
                         # No further conversion needed.
@@ -1017,19 +1039,21 @@ class Builder:
                         paintDict = _convertSweepAngles(paintDict)
                         colorGlyphs[glyphName] = self._dataToPaint(paintDict, pb)
 
-                if pb.varstorebuilder is None:
-                    pb.varstorebuilder = OnlineVarStoreBuilder(
-                        [axis.tag for axis in self.globalAxes]
-                    )
-
                 pb.build_colr(colorGlyphs)
                 pb.build_palette()
 
+                # If any palette has a name, rebuild CPAL as version 1 with
+                # paletteLabels. buildCPAL expects float [0..1] RGBA tuples —
+                # exactly what .fontra stores — and automatically upgrades
+                # CPAL.version to 1 when paletteLabels are present.
+                # This replaces the version-0 CPAL that pb.build_palette() wrote.
                 if palettes and _palettesHaveLabels(paletteLabels):
-                    from fontTools.colorLib.builder import buildCPAL
-
+                    floatPalettes = [
+                        [tuple(color) for color in palette]
+                        for palette in palettes
+                    ]
                     builder.font["CPAL"] = buildCPAL(
-                        palettes,
+                        floatPalettes,
                         paletteLabels=paletteLabels,
                         nameTable=builder.font["name"],
                     )
