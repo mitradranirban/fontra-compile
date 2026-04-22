@@ -3,11 +3,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import cffsubr
-from fontTools.colorLib.builder import buildCPAL
 from fontra.core.classes import VariableGlyph
 from fontra.core.path import PackedPath, Path
 from fontra.core.protocols import ReadableFontBackend
+from fontTools.colorLib.builder import buildCPAL
 from fontTools.designspaceLib import AxisDescriptor
+from fontTools.feaLib.builder import addOpenTypeFeatures
 from fontTools.fontBuilder import FontBuilder
 from fontTools.misc.fixedTools import floatToFixed as fl2fi
 from fontTools.misc.roundTools import noRound, otRound
@@ -15,10 +16,11 @@ from fontTools.misc.timeTools import timestampNow
 from fontTools.misc.transform import DecomposedTransform
 from fontTools.misc.vector import Vector
 from fontTools.pens.boundsPen import BoundsPen, ControlBoundsPen
+from fontTools.pens.cu2quPen import Cu2QuPen
 from fontTools.pens.pointPen import PointToSegmentPen
 from fontTools.pens.recordingPen import RecordingPen
 from fontTools.pens.t2CharStringPen import T2CharStringPen
-from fontTools.pens.ttGlyphPen import TTGlyphPointPen
+from fontTools.pens.ttGlyphPen import TTGlyphPen, TTGlyphPointPen
 from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.tables import otTables as ot
 from fontTools.ttLib.tables._g_l_y_f import Glyph as TTGlyph
@@ -72,9 +74,12 @@ def _convertSweepAngles(paint):
         else:
             result[k] = v
     return result
+
+
 # ---------------------------------------------------------------------------
 # CPAL palette label helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalizePaletteLabels(rawLabels, paletteCount):
     """Return a list of length paletteCount with str or None per entry."""
@@ -89,8 +94,10 @@ def _normalizePaletteLabels(rawLabels, paletteCount):
         labels.append(value)
     return labels
 
+
 def _palettesHaveLabels(labels):
     return any(label is not None for label in labels)
+
 
 # ---------------------------------------------------------------------------
 # COLRv1 variation merging
@@ -376,26 +383,6 @@ def _buildColorLine(colorLineData):
         for stop in stops
     ]
     return ColorLine(compiled_stops, extend=extend)
-
-
-# Cpal Palette Name helper
-
-
-def _normalizePaletteLabels(rawLabels, paletteCount):
-    rawLabels = rawLabels or []
-    labels = []
-    for i in range(paletteCount):
-        value = rawLabels[i] if i < len(rawLabels) else None
-        if isinstance(value, str):
-            value = value.strip() or None
-        else:
-            value = None
-        labels.append(value)
-    return labels
-
-
-def _palettesHaveLabels(labels):
-    return any(label is not None for label in labels)
 
 
 # ---------------------------------------------------------------------------
@@ -919,7 +906,20 @@ class Builder:
 
         builder.updateHead(created=timestampNow(), modified=timestampNow())
         builder.setupGlyphOrder(self.glyphOrder)
-        builder.setupNameTable(dict())
+        font_data = await self.getFontData() or {}
+        font_info = font_data.get("fontInfo", {})
+        family_name = font_info.get("familyName", "Unnamed")
+        name_strings = {
+            "familyName": family_name,
+            "styleName": font_info.get("styleName", "Regular"),
+            "uniqueFontIdentifier": font_info.get("postscriptFullName") or family_name,
+            "fullName": font_info.get("postscriptFullName") or family_name,
+            "version": "Version " + str(font_info.get("openTypeNameVersion", "1.0")),
+            "psName": (
+                font_info.get("postscriptFontName") or family_name.replace(" ", "")
+            ),
+        }
+        builder.setupNameTable(name_strings)
 
         localAxisTags = set()
         for glyphInfo in self.glyphInfos.values():
@@ -936,13 +936,6 @@ class Builder:
 
         if not self.buildCFF2:
             glyphs = getGlyphInfoAttributes(self.glyphInfos, "ttGlyph")
-
-            if any(
-                g.numberOfContours > 0 and any(f & flagCubic for f in g.flags)
-                for g in glyphs.values()
-            ):
-                # We have cubic curves, bump the head.glyphDataFormat field
-                builder.font["head"].glyphDataFormat = 1
 
             builder.setupGlyf(glyphs)
             gvarVariations = getGlyphInfoAttributes(self.glyphInfos, "gvarVariations")
@@ -988,7 +981,7 @@ class Builder:
                 pb.varstorebuilder = OnlineVarStoreBuilder(
                     [axis.tag for axis in self.globalAxes]
                 )
-                                # Read raw JSON directly — backend drops customData on
+                # Read raw JSON directly — backend drops customData on
                 # deserialization.
                 colorV1RawData = await self.getRawColorV1Data()
                 colorGlyphs = {}
@@ -1008,7 +1001,9 @@ class Builder:
                             {
                                 self.globalAxisTags.get(k, k): v
                                 for k, v in source.location.items()
-                                if self.globalAxisTags.get(k, k)  # skip axes not in globalAxisTags
+                                if self.globalAxisTags.get(
+                                    k, k
+                                )  # skip axes not in globalAxisTags
                             }
                             for source in activeSources
                         ]
@@ -1020,8 +1015,12 @@ class Builder:
 
                         colorModel = glyphInfo.model
                         paintDict = merge_paint_sources(
-                            layerPaints, activeSources, colorModel, self.globalAxisTags, userSpaceLocs,
-)
+                            layerPaints,
+                            activeSources,
+                            colorModel,
+                            self.globalAxisTags,
+                            userSpaceLocs,
+                        )
                         # _dataToPaint receives angles already in degrees
                         # (as plain floats or variation keyframe dicts).
                         # No further conversion needed.
@@ -1049,8 +1048,7 @@ class Builder:
                 # This replaces the version-0 CPAL that pb.build_palette() wrote.
                 if palettes and _palettesHaveLabels(paletteLabels):
                     floatPalettes = [
-                        [tuple(color) for color in palette]
-                        for palette in palettes
+                        [tuple(color) for color in palette] for palette in palettes
                     ]
                     builder.font["CPAL"] = buildCPAL(
                         floatPalettes,
@@ -1121,6 +1119,18 @@ class Builder:
 
         if self.buildCFF2 and self.subroutinize:
             cffsubr.subroutinize(builder.font)
+
+        # Compile OpenType features (GSUB/GPOS) from features.txt
+        backend_path = getattr(self.reader, "path", None) or getattr(
+            self.reader, "_path", None
+        )
+        if backend_path:
+            fea_path = pathlib.Path(backend_path) / "features.txt"
+            if fea_path.is_file():
+                try:
+                    addOpenTypeFeatures(builder.font, fea_path)
+                except Exception as e:
+                    print(f"Warning: could not compile OpenType features: {e}")
 
         return builder.font
 
@@ -1410,11 +1420,50 @@ def buildTTGlyph(glyph, glyphSources, defaultLayerGlyph, model):
     defaultLayerGlyph.path.drawPoints(ttGlyphPen)
     ttGlyph = ttGlyphPen.glyph()
 
-    sourceCoordinates = prepareSourceCoordinates(glyph, glyphSources)
-    gvarVariations = (
-        prepareGvarVariations(sourceCoordinates, model) if model is not None else []
+    has_cubics = ttGlyph.numberOfContours > 0 and any(
+        f & flagCubic for f in ttGlyph.flags
     )
 
+    if not has_cubics:
+        sourceCoordinates = prepareSourceCoordinates(glyph, glyphSources)
+        gvarVariations = (
+            prepareGvarVariations(sourceCoordinates, model) if model is not None else []
+        )
+        return ttGlyph, gvarVariations
+
+    # cu2qu path: convert ALL sources in lockstep so point counts match
+    convertedGlyphs = []
+    for source in glyphSources:
+        sourceGlyph = glyph.layers[source.layerName].glyph
+        rec = RecordingPen()
+        sourceGlyph.path.drawPoints(PointToSegmentPen(rec))
+        ttpen = TTGlyphPen(None)
+        cu2pen = Cu2QuPen(ttpen, 1.0, reverse_direction=False)
+        for op, args in rec.value:
+            getattr(cu2pen, op)(*args)
+        convertedGlyphs.append(ttpen.glyph())
+
+    defaultIdx = model.reverseMapping[0] if model is not None else 0
+    ttGlyph = convertedGlyphs[defaultIdx]
+
+    # Rebuild sourceCoordinates from converted quadratic glyphs
+    newSourceCoordinates = []
+    for i, source in enumerate(glyphSources):
+        sourceGlyph = glyph.layers[source.layerName].glyph
+        g = convertedGlyphs[i]
+        coords = GlyphCoordinates()
+        if g.numberOfContours > 0:
+            coords.array.extend(g.coordinates.array)
+        # phantom points (LSB, advance, 2 × reserved)
+        coords.append((0, 0))
+        coords.append((sourceGlyph.xAdvance, 0))
+        coords.append((0, 0))
+        coords.append((0, 0))
+        newSourceCoordinates.append(coords)
+
+    gvarVariations = (
+        prepareGvarVariations(newSourceCoordinates, model) if model is not None else []
+    )
     return ttGlyph, gvarVariations
 
 
