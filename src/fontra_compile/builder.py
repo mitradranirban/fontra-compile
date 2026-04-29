@@ -76,6 +76,34 @@ def _convertSweepAngles(paint):
     return result
 
 
+# ------------------------------------------------------------------------
+# PaintTransform Matrix Builder helper
+# --------------------------------------------------------------------------
+def _get_paint_transform_matrix(data):
+    matrix = data.get("matrix")
+    if matrix is not None:
+        return [matrix[i] for i in range(6)]
+
+    t = data.get("transform", data)
+    dt = DecomposedTransform()
+
+    for key in (
+        "translateX",
+        "translateY",
+        "rotation",
+        "scaleX",
+        "scaleY",
+        "skewX",
+        "skewY",
+        "tCenterX",
+        "tCenterY",
+    ):
+        if key in t:
+            setattr(dt, key, t[key])
+
+    return list(dt.toTransform())
+
+
 # ---------------------------------------------------------------------------
 # CPAL palette label helpers
 # ---------------------------------------------------------------------------
@@ -320,7 +348,7 @@ def _merge_node(nodes, default, model, sources, axisTags, userSpaceLocs):
             "type": ptype,
             "matrix": [
                 _merge_scalar(
-                    [n["matrix"][i] for n in nodes],
+                    [_get_paint_transform_matrix(n)[i] for n in nodes],
                     model,
                     sources,
                     axisTags,
@@ -1363,7 +1391,7 @@ class Builder:
 
         elif ptype == "PaintTransform":
             return pb.PaintTransform(
-                [data["matrix"][i] for i in range(6)],
+                _get_paint_transform_matrix(data),
                 self._dataToPaint(data["paint"], pb),
             )
 
