@@ -85,8 +85,11 @@ def _get_paint_transform_matrix(data):
         return [matrix[i] for i in range(6)]
 
     t = data.get("transform", data)
-    dt = DecomposedTransform()
 
+    if all(k in t for k in ("xx", "xy", "yx", "yy", "dx", "dy")):
+        return [t["xx"], t["xy"], t["yx"], t["yy"], t["dx"], t["dy"]]
+
+    dt = DecomposedTransform()
     for key in (
         "translateX",
         "translateY",
@@ -100,7 +103,6 @@ def _get_paint_transform_matrix(data):
     ):
         if key in t:
             setattr(dt, key, t[key])
-
     return list(dt.toTransform())
 
 
