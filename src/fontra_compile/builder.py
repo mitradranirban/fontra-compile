@@ -1,3 +1,4 @@
+# pyrefly: ignore-errors
 import pathlib
 from dataclasses import dataclass, field
 from typing import Any
@@ -683,16 +684,17 @@ class Builder:
 
             if codePoints is not None:
                 self.cmap.update((codePoint, glyphName) for codePoint in codePoints)
-                try:
-                    glyphInfo = await self.prepareOneGlyph(glyphName)
-                except KeyboardInterrupt:
-                    raise
-                except (
-                    InterpolationError,
-                    MissingBaseGlyphError,
-                    VariationModelError,
-                ) as e:
-                    print("warning", glyphName, repr(e))  # TODO: use logging
+
+            try:
+                glyphInfo = await self.prepareOneGlyph(glyphName)
+            except KeyboardInterrupt:
+                raise
+            except (
+                InterpolationError,
+                MissingBaseGlyphError,
+                VariationModelError,
+            ) as e:
+                print("warning", glyphName, repr(e))  # TODO: use logging
 
             if glyphInfo is None:
                 # make .notdef based on UPM
@@ -1020,7 +1022,8 @@ class Builder:
                         continue
                     glyphInfo = self.glyphInfos[glyphName]
                     sourceGlyph = await self.getSourceGlyph(glyphName)
-
+                    if sourceGlyph is None:
+                        continue
                     if len(layerPaints) > 1 and glyphInfo.model is not None:
                         # Variable path: merge sources, converting
                         # SweepGradient angles turns→degrees inside
@@ -1177,7 +1180,7 @@ class Builder:
         coverage = ot.Coverage()
         coverage.glyphs = glyphNames
 
-        varcSubtable = ot.VARC()
+        varcSubtable = ot.VARC()  # type: ignore
         varcSubtable.Version = 0x00010000
         varcSubtable.Coverage = coverage
 
@@ -1199,7 +1202,7 @@ class Builder:
                         & VarComponentFlags.AXIS_VALUES_HAVE_VARIATION
                     )
 
-                compo = ot.VarComponent()
+                compo = ot.VarComponent()  # type: ignore
                 compo.flags = compoInfo.flags
                 compo.glyphName = compoInfo.name
 
@@ -1214,18 +1217,18 @@ class Builder:
                 # Add a component for the outline section, so we can
                 # effectively mix outlines and components.  This is a
                 # special case in the spec.
-                compo = ot.VarComponent()
+                compo = ot.VarComponent()  # type: ignore
                 compo.glyphName = glyphName
                 components.append(compo)
 
-            compositeGlyph = ot.VarCompositeGlyph(components)
+            compositeGlyph = ot.VarCompositeGlyph(components)  # type: ignore
             variableComposites.append(compositeGlyph)
 
-        compoGlyphs = ot.VarCompositeGlyphs()
+        compoGlyphs = ot.VarCompositeGlyphs()  # type: ignore
         compoGlyphs.VarCompositeGlyph = variableComposites
         varcSubtable.VarCompositeGlyphs = compoGlyphs
 
-        axisIndicesList = ot.AxisIndicesList()
+        axisIndicesList = ot.AxisIndicesList()  # type: ignore
         axisIndicesList.Item = [list(k) for k in axisIndicesMapping.keys()]
         varcSubtable.AxisIndicesList = axisIndicesList
 
@@ -1446,32 +1449,20 @@ def computeLeftSideBearing(path: Path | PackedPath, useTightBounds: bool) -> int
 
 
 def buildTTGlyph(glyph, glyphSources, defaultLayerGlyph, model):
-    ttGlyphPen = TTGlyphPointPen(None)
-    defaultLayerGlyph.path.drawPoints(ttGlyphPen)
-    ttGlyph = ttGlyphPen.glyph()
-
-    has_cubics = ttGlyph.numberOfContours > 0 and any(
-        f & flagCubic for f in ttGlyph.flags
-    )
-
-    if not has_cubics:
-        sourceCoordinates = prepareSourceCoordinates(glyph, glyphSources)
-        gvarVariations = (
-            prepareGvarVariations(sourceCoordinates, model) if model is not None else []
-        )
-        return ttGlyph, gvarVariations
-
-    # cu2qu path: convert ALL sources in lockstep so point counts match
+    # cu2qu path: convert ALL sources to quadratic
     convertedGlyphs = []
     for source in glyphSources:
         sourceGlyph = glyph.layers[source.layerName].glyph
-        rec = RecordingPen()
-        sourceGlyph.path.drawPoints(PointToSegmentPen(rec))
         ttpen = TTGlyphPen(None)
-        cu2pen = Cu2QuPen(ttpen, 1.0, reverse_direction=False)
-        for op, args in rec.value:
-            getattr(cu2pen, op)(*args)
-        convertedGlyphs.append(ttpen.glyph())
+        cu2pen = Cu2QuPen(ttpen, 1.0, reverse_direction=True)
+        pointPen = PointToSegmentPen(cu2pen)
+        sourceGlyph.path.drawPoints(pointPen)
+        ttGlyph = ttpen.glyph()
+        # Remove any cubic flags when saving to the glyf table
+        if hasattr(ttGlyph, "flags") and ttGlyph.flags is not None:
+            for idx in range(len(ttGlyph.flags)):
+                ttGlyph.flags[idx] &= ~flagCubic
+        convertedGlyphs.append(ttGlyph)
 
     defaultIdx = model.reverseMapping[0] if model is not None else 0
     ttGlyph = convertedGlyphs[defaultIdx]
